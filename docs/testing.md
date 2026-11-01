@@ -1,0 +1,42 @@
+# Executed verification — Phase 6
+
+Session: 2026-10-29–2026-11-01, Windows. Node 24.12.0 / npm 11.6.2 / Python 3.13.0.
+
+| Check | Result |
+|---|---|
+| Repository `python scripts/check_repository.py` | Passed; no local DB/environment files or recognizable credentials tracked |
+| Backend `python -m pytest -q -p no:cacheprovider` | **83 passed** |
+| Backend `python -m ruff check app tests` | Passed |
+| Backend `python -m pip check` | No broken requirements |
+| Frontend `npm test` | **25 passed**, 8 files |
+| Frontend `npm run typecheck` | Passed |
+| Frontend `npm run lint` | Passed |
+| Frontend `npm run build` | TypeScript and production build passed |
+| Browser → local backend | Four-day Paris preference summary; demo search returned France/Texas; explicit France selection displayed weather/places |
+| Desktop and mobile visual QA | Discovery inspected; 390 × 844 layout has no horizontal overflow; temporary viewport reset |
+| Live Open-Meteo geocoding | İstanbul: 3 candidates; Barcelona: 10; Paris: 10; nonexistent name: 0 |
+| Live Open-Meteo forecast | Three days, status ok, Europe/Istanbul time zone |
+| Live Overpass | 2026-11-01 small query: main endpoint returned 502; documented fallback timed out. **Live result unverified** |
+| Gemini SDK live request | **Not run:** no API key or eligible account attestation configured |
+| Browser AI status | Missing-key state shown from real FastAPI response; Turkish/English copy verified |
+| Browser Phase 5 flow | Two-day Paris demo generated, saved, day 2 revised to version 2, reopened by ID and listed in My Trips |
+| Responsive QA | Desktop and 390 × 844 saved-trip views inspected; no horizontal overflow and no console warnings/errors |
+| Portfolio screenshots | Real local home, saved-trip list, desktop detail and mobile detail captured under `docs/screenshots` |
+| Render production path | Blueprint parsed; `/api` frontend build passed; FastAPI asset, SPA fallback, and unknown-API behavior passed |
+| Clean-source setup | Source-only archive extracted separately; `npm ci` and Python locked dependency installation completed, then full checks passed |
+
+## Coverage
+
+Backend tests retain Phase 1–5 coverage and add a complete Turkish demo journey across validation, ambiguous-city search, weather/places, idempotent generation, targeted revision, reopen and delete. The injected transport raises if that journey attempts network access. SQLite CRUD, evidence-reusing revision, a fake Gemini model, same-origin production serving, single Overpass fallback and no-rotation-on-429 behavior remain covered.
+
+Frontend tests retain form/navigation/discovery/AI-status coverage and add a complete screen-level demo journey plus direct map/timeline synchronization, source-link, live-navigation and synthetic no-navigation checks. Component tests mock the typed API and external map boundary.
+
+## Limits
+
+Live checks were separate manual development probes, not CI tests. Open-Meteo success does not guarantee future availability; both tested Overpass endpoints failing in this environment is not proof of a provider-wide outage. Gemini live inference/function calling was not exercised because the project contained no key and no operator account attestation. The explicit offline demo and fake-model agent contract were exercised. Maps/Search grounding remains disabled.
+
+The Python stack emits a Starlette TestClient deprecation warning about HTTPX; tests pass, and runtime HTTPX remains the selected integration client. Optional pytest caching was disabled because of sandbox file permissions. Vite uses native config loading and Vitest threads for this Windows environment.
+
+This managed Windows host also denied `ensurepip` access to Python-created temporary directories. For the clean-source check, the environment was created with `venv --without-pip`, bootstrapped from Python's bundled pip wheel, and then populated from `requirements-lock.txt`. The documented standard `venv` workflow remains the normal setup path; this workaround was specific to the verification host. The resulting isolated environment ran the complete check suite above.
+
+GitHub Actions and Render configuration are included but have not run remotely. macOS/Linux setup commands have not been executed. Render Free uses ephemeral SQLite and is suitable only for a portfolio demo. No paid credentials were used. Repeat commands are in the README; browser walkthrough is in [demo.md](demo.md).

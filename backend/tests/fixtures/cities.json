@@ -1,0 +1,6 @@
+{
+  "results": [
+    {"id": 2988507, "name": "Paris", "country": "France", "country_code": "FR", "admin1": "Île-de-France", "latitude": 48.8566, "longitude": 2.3522, "timezone": "Europe/Paris", "feature_code": "PPLC"},
+    {"id": 4717560, "name": "Paris", "country": "United States", "country_code": "US", "admin1": "Texas", "latitude": 33.66, "longitude": -95.55, "timezone": "America/Chicago", "feature_code": "PPL"}
+  ]
+}

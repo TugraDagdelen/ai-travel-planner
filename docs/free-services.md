@@ -1,0 +1,26 @@
+# Free-service verification
+
+Reviewed **2026-11-01** for low-volume, non-commercial local development and an honest portfolio demonstration. No payment method or billing account was created. This review cannot certify a particular Google project; the user must check their account before enabling the optional live connection.
+
+| Capability | Evidence and usage conditions | Implementation / verification |
+|---|---|---|
+| Open-Meteo geocoding | [Geocoding docs](https://open-meteo.com/en/docs/geocoding-api), [terms](https://open-meteo.com/en/terms). Public city search; Open-Meteo/GeoNames attribution | Implemented and live tested with İstanbul, Barcelona, Paris and an unmatched name |
+| Open-Meteo weather | [Forecast docs](https://open-meteo.com/en/docs), [terms](https://open-meteo.com/en/terms). Free hosted endpoint for non-commercial use; limits below; source attribution | Implemented and live tested; up to 16-day window, missing days explicit |
+| OSM / Overpass | [Instance policy](https://dev.overpass-api.de/overpass-doc/en/preface/commons.html), [public instances](https://wiki.openstreetmap.org/wiki/Overpass_API#Public_Overpass_API_instances), [query reference](https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL), [OSM attribution/ODbL](https://www.openstreetmap.org/copyright). Shared public infrastructure for restrained use | Main endpoint plus one documented public fallback after transport/transient failure; never rotates after 429; parsing/failure/fallback tests pass; live retrieval remains unverified |
+| Gemini inference | [Models](https://ai.google.dev/gemini-api/docs/models), [pricing](https://ai.google.dev/gemini-api/docs/pricing), [limits](https://ai.google.dev/gemini-api/docs/rate-limits), [terms](https://ai.google.dev/gemini-api/terms). `gemini-3.5-flash-lite` input/output is shown free on Free tier; project/model/region eligibility still varies | Official SDK connection path implemented; live unverified because no key/account attestation was configured |
+| Gemini function calling | [Function calling](https://ai.google.dev/gemini-api/docs/function-calling). Manual execution keeps validation and budgets server-side | Implemented with two allowlisted tools; live call remains unverified without an eligible key |
+| Google Maps grounding | [Docs](https://ai.google.dev/gemini-api/docs/maps-grounding), [pricing](https://ai.google.dev/gemini-api/docs/pricing). Reviewed model table says Free tier unavailable; paid path can continue after monthly allowance | Disabled and fail-closed even when flag is true; OSM fallback |
+| Google Search grounding | [Docs](https://ai.google.dev/gemini-api/docs/google-search), [pricing](https://ai.google.dev/gemini-api/docs/pricing). Reviewed model table says Free tier unavailable and queries may become billable | Disabled and fail-closed even when flag is true; OSM fallback |
+| Leaflet / OSM tiles | [Tile policy](https://operations.osmfoundation.org/policies/tiles/). Attribution, headers, caching and no bulk downloads | Implemented with attribution and graceful tile failure; no bulk download behavior |
+| Google Maps URLs | [URL docs](https://developers.google.com/maps/documentation/urls/get-started). Independent of paid Maps APIs | Implemented only for provider-backed coordinates; omitted for synthetic demo points |
+| SQLite | [SQLite](https://www.sqlite.org/index.html). Local storage requires no hosted subscription | Implemented locally through SQLAlchemy; database files are excluded from Git |
+
+Open-Meteo's reviewed hosted free-service terms limit non-commercial use to fewer than 10,000 requests/day, 5,000/hour and 600/minute. Attribution conditions also apply. Recheck terms before changing the usage context; open data licensing and hosted API usage are distinct.
+
+Shared Overpass instances are not a production backend guarantee. Queries are bounded and the UI preserves OSM attribution. A transport or transient service failure can trigger exactly one request to the documented Private.coffee public instance. A 429 response starts cooldown and never triggers rotation, so the fallback cannot be used to evade limits.
+
+Local safeguards: one request at a time per provider group; spacing of 1 second for Meteo and 3 for Overpass; 120/hour and 600/day budgets; bounded retries and Retry-After handling; memory caching. Counters reset per process and do not represent provider-side quotas or a billing guarantee. Full bounds are in [architecture](architecture.md).
+
+Gemini's unpaid-service terms say submitted content and generated responses may be used to improve Google products and may be reviewed by humans. The connection check sends a fixed non-sensitive prompt. Explicit AI itinerary generation sends the trip request, notes and public tool evidence, and the UI presents a privacy warning. Deterministic/demo modes send nothing to Gemini. In the EEA, Switzerland or UK, an API client made available to users may require Paid Services; regional/account eligibility must be checked for the actual project and usage.
+
+Before enabling the connection, follow [gemini-setup.md](gemini-setup.md), confirm no active billing account and set the local attestation. `FREE_ONLY_MODE=true` and request counters cannot guarantee provider-side free use. No grounding, scraping, paid fallback, account rotation, publication or billing setup is included.

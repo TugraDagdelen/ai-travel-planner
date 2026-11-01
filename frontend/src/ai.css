@@ -1,0 +1,11 @@
+.ai-panel { margin: 3rem 0; padding: clamp(1.25rem, 4vw, 2rem); border: 1px solid #d9dfd1; border-radius: 18px; background: #f0f3e9; }
+.ai-panel-heading { display: flex; align-items: center; gap: 1rem; }
+.ai-panel h2 { margin: .35rem 0 .8rem; font-size: clamp(1.7rem, 4vw, 2.2rem); }
+.ai-panel p { line-height: 1.7; max-width: 76ch; }
+.ai-actions { display: flex; flex-wrap: wrap; gap: .75rem; margin: 1.25rem 0; }
+.ai-actions .secondary-button { border: 1px solid #8c9e83; padding: .8rem 1.1rem; border-radius: 8px; background: #fffef9; cursor: pointer; }
+.ai-actions button:disabled { opacity: .55; cursor: default; }
+.ai-status, .ai-success { margin: 1rem 0; padding: 1rem; border-radius: 10px; background: #fffef9; }
+.ai-success strong { display: flex; gap: .5rem; align-items: center; }
+.ai-success small { overflow-wrap: anywhere; }
+.ai-grounding-note { border-top: 1px solid #d9dfd1; padding-top: 1rem; font-size: .85rem; color: #5b6554; }

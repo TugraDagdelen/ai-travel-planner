@@ -1,0 +1,12 @@
+{
+  "elements": [
+    {"type": "node", "id": 1, "lat": 48.857, "lon": 2.353, "tags": {"name": "Fixture Museum", "tourism": "museum", "indoor": "yes"}},
+    {"type": "node", "id": 1, "lat": 48.857, "lon": 2.353, "tags": {"name": "Fixture Museum", "tourism": "museum"}},
+    {"type": "way", "id": 2, "center": {"lat": 48.85701, "lon": 2.35301}, "tags": {"name": "fixture museum", "tourism": "museum"}},
+    {"type": "way", "id": 3, "center": {"lat": 48.86, "lon": 2.355}, "tags": {"name": "Fixture Park", "leisure": "park"}},
+    {"type": "relation", "id": 4, "tags": {"name": "Fixture Unknown Point", "tourism": "museum"}},
+    {"type": "node", "id": 5, "lat": 48.856, "lon": 2.352, "tags": {"tourism": "museum"}},
+    {"type": "node", "id": 6, "lat": 0, "lon": 0, "tags": {"name": "Wrong City", "tourism": "museum"}},
+    {"type": "way", "id": 7, "center": {"lat": 120, "lon": 200}, "tags": {"name": "Invalid Point", "tourism": "museum"}}
+  ]
+}
