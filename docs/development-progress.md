@@ -1,13 +1,13 @@
 # Development progress
 
-Updated: **2026-10-31**, version **0.6.0**.
+Updated: **2026-11-01**, version **0.6.0**.
 
 | Phase | Status | Evidence / remaining work |
 |---|---|---|
 | 1 — Foundation | Complete | Real React → FastAPI validation; responsive TR/EN UI; dependencies and setup docs |
 | 2 — Free data integrations | Implemented | City/weather/place APIs, provenance, caching, budgets, explicit demo and UI. Open-Meteo live verified; Overpass live unavailable here |
-| 3 — Gemini and optional research | Implemented, live unverified | Official SDK connection path, reviewed model allowlist, account attestation, safe errors and independent grounding gates. No key configured here |
-| 4 — Agent and itineraries | Implemented, live AI unverified | Bounded function calling, validated itinerary, SQLite and evidence-reusing revisions |
+| 3 — Gemini and optional research | Implemented, connection live verified | Official SDK connection path returned `connected` locally and from Docker with an operator-confirmed Free Tier project; no key stored. Grounding remains disabled |
+| 4 — Agent and itineraries | Implemented, offline agent verified | Bounded function calling, validated itinerary, SQLite and evidence-reusing revisions; full live tool-calling itinerary remains provider-dependent |
 | 5 — Complete product | Complete | Leaflet route, daily timeline/weather, citations, saved-trip CRUD UI and revision history |
 | 6 — Final portfolio QA | Complete | Offline end-to-end journey, real screenshots, repository scan, clean-source install and GitHub-ready docs |
 
@@ -52,7 +52,7 @@ Updated: **2026-10-31**, version **0.6.0**.
 - Output requires valid structured JSON, one normal candidate and no function call. A connection check never becomes an itinerary.
 - Google Maps/Search adapters independently return unavailable with OSM fallback; flags cannot bypass the reviewed free-tier decision.
 - Turkish/English connection panel separates a read-only status check from the explicit live model request.
-- Live Gemini remains unverified because no key/account was configured. This is shown in the UI and documentation.
+- The bounded Gemini connection check returned `connected` locally and inside Docker on 2026-11-01 with an operator-confirmed Free Tier project; the key remains local and ignored.
 - Phase 3 coverage remains in the full Phase 4 suite.
 
 ## Earlier Phase 2 delivery
@@ -70,6 +70,6 @@ Updated: **2026-10-31**, version **0.6.0**.
 
 The earlier live Overpass query timed out and live place retrieval has not yet been demonstrated here. The app reports failure and offers an explicit demo choice. It now tries one documented public fallback after a transport or transient service failure, but never after rate limiting; this behavior is covered offline and still needs a live probe.
 
-The Gemini connection and agent paths exist, but no live response was claimed without the user's eligible key. The tool loop is verified with an offline fake-model contract and real parser/provider fixtures. Draft forms, caches, limits and selected-city IDs reset with the corresponding process. Process-local limits are not provider billing controls. OpenStreetMap tiles and external source/navigation links still require internet; their failure does not remove the saved itinerary.
+The Gemini connection path is live-verified with the user's eligible local key. The complete tool loop remains verified through an offline fake-model contract and real parser/provider fixtures; a connection check alone does not prove a full live itinerary. Draft forms, caches, limits and selected-city IDs reset with the corresponding process. Process-local limits are not provider billing controls. OpenStreetMap tiles and external source/navigation links still require internet; their failure does not remove the saved itinerary.
 
-No account creation, key generation, billing setup, GitHub push or deployment has occurred yet. Google grounding is disabled. A Render Free Blueprint and same-origin production server are prepared; hosted SQLite remains explicitly ephemeral. The repository is initialized locally on `main` and ready for its first commit. The original specification remains in `CODEX_MASTER_PROMPT.md`.
+The public GitHub repository and remote GitHub Actions run are complete. Docker production serving is verified locally with a named SQLite volume. No Render service was created, and Google grounding remains disabled. The Render Free Blueprint remains optional; hosted SQLite would be explicitly ephemeral. The original specification remains in `CODEX_MASTER_PROMPT.md`.

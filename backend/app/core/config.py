@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     gemini_api_key: SecretStr = SecretStr("")
     gemini_model: str = "gemini-3.5-flash-lite"
     gemini_free_tier_confirmed: bool = False
-    gemini_timeout_seconds: float = Field(default=25, ge=1, le=30)
+    gemini_timeout_seconds: float = Field(default=25, ge=1, le=60)
     gemini_daily_limit: int = Field(default=10, ge=1, le=50)
     gemini_minute_limit: int = Field(default=6, ge=1, le=10)
     database_url: str = f"sqlite:///{(BACKEND_ROOT / 'data' / 'travel_planner.db').as_posix()}"

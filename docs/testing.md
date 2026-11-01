@@ -17,12 +17,13 @@ Session: 2026-10-29–2026-11-01, Windows. Node 24.12.0 / npm 11.6.2 / Python 3.
 | Live Open-Meteo geocoding | İstanbul: 3 candidates; Barcelona: 10; Paris: 10; nonexistent name: 0 |
 | Live Open-Meteo forecast | Three days, status ok, Europe/Istanbul time zone |
 | Live Overpass | 2026-11-01 small query: main endpoint returned 502; documented fallback timed out. **Live result unverified** |
-| Gemini SDK live request | **Not run:** no API key or eligible account attestation configured |
+| Gemini SDK live request | **Passed 2026-11-01:** operator-confirmed Free Tier key returned `connected` with `gemini-3.5-flash-lite`; key remained local and ignored |
 | Browser AI status | Missing-key state shown from real FastAPI response; Turkish/English copy verified |
 | Browser Phase 5 flow | Two-day Paris demo generated, saved, day 2 revised to version 2, reopened by ID and listed in My Trips |
 | Responsive QA | Desktop and 390 × 844 saved-trip views inspected; no horizontal overflow and no console warnings/errors |
 | Portfolio screenshots | Real local home, saved-trip list, desktop detail and mobile detail captured under `docs/screenshots` |
 | Render production path | Blueprint parsed; `/api` frontend build passed; FastAPI asset, SPA fallback, and unknown-API behavior passed |
+| Docker production path | Multi-stage image built; Compose health `ok`, home `200`, SPA title present, named SQLite volume active, and Gemini returned `connected` from the container |
 | Clean-source setup | Source-only archive extracted separately; `npm ci` and Python locked dependency installation completed, then full checks passed |
 
 ## Coverage
@@ -33,10 +34,10 @@ Frontend tests retain form/navigation/discovery/AI-status coverage and add a com
 
 ## Limits
 
-Live checks were separate manual development probes, not CI tests. Open-Meteo success does not guarantee future availability; both tested Overpass endpoints failing in this environment is not proof of a provider-wide outage. Gemini live inference/function calling was not exercised because the project contained no key and no operator account attestation. The explicit offline demo and fake-model agent contract were exercised. Maps/Search grounding remains disabled.
+Live checks were separate manual development probes, not CI tests. Open-Meteo success does not guarantee future availability; both tested Overpass endpoints failing in this environment is not proof of a provider-wide outage. The Gemini structured connection request succeeded locally and inside Docker; the full live tool-calling itinerary was not claimed by that connection-only check. The explicit offline demo and fake-model agent contract were exercised. Maps/Search grounding remains disabled.
 
 The Python stack emits a Starlette TestClient deprecation warning about HTTPX; tests pass, and runtime HTTPX remains the selected integration client. Optional pytest caching was disabled because of sandbox file permissions. Vite uses native config loading and Vitest threads for this Windows environment.
 
 This managed Windows host also denied `ensurepip` access to Python-created temporary directories. For the clean-source check, the environment was created with `venv --without-pip`, bootstrapped from Python's bundled pip wheel, and then populated from `requirements-lock.txt`. The documented standard `venv` workflow remains the normal setup path; this workaround was specific to the verification host. The resulting isolated environment ran the complete check suite above.
 
-GitHub Actions and Render configuration are included but have not run remotely. macOS/Linux setup commands have not been executed. Render Free uses ephemeral SQLite and is suitable only for a portfolio demo. No paid credentials were used. Repeat commands are in the README; browser walkthrough is in [demo.md](demo.md).
+GitHub Actions passed remotely for the public repository. Render configuration is included but no Render service was created. The Docker production path was built and exercised on Windows; macOS/Linux setup commands have not been executed. Render Free uses ephemeral SQLite and is suitable only for a portfolio demo. No paid credentials were used. Repeat commands are in the README; browser walkthrough is in [demo.md](demo.md).

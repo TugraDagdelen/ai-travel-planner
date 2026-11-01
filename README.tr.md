@@ -4,7 +4,7 @@ React + TypeScript + Tailwind arayüzü ve FastAPI backend'i ile geliştirilen s
 
 **Aşama 6 tamamlandı (v0.6.0).** Yerel ürün akışı, çevrimdışı testler, depo güvenlik taraması, temiz kurulum belgeleri, mimari anlatım ve sunum görselleri hazır. Doğrulanmış plan oluşturma/kaydetme, Leaflet rota haritası, günlük hava, kaynaklar, “Seyahatlerim”, başlık düzenleme, revizyon geçmişi ve silme akışları tamamlandı.
 
-Canlı Gemini bağlantısı bu ortamda anahtar olmadığı için **doğrulanmadı**. Bu sürüm yalnızca ücretsiz katmanı bulunan `gemini-3.5-flash-lite` modeline izin verir. Google Maps/Search grounding, seçilen modelin API ücretsiz katmanında sunulmadığı için kapalıdır.
+Sınırlı Gemini SDK bağlantı kontrolü, kullanıcı tarafından Free Tier olduğu doğrulanan yerel bir projeyle 2026-11-01 tarihinde başarıyla çalıştı; anahtar depoda tutulmaz. Tam canlı araç çağırmalı seyahat üretimi yine sağlayıcıların erişilebilirliğine bağlıdır. Bu sürüm yalnızca ücretsiz katmanı bulunan `gemini-3.5-flash-lite` modeline izin verir. Google Maps/Search grounding, seçilen modelin API ücretsiz katmanında sunulmadığı için kapalıdır.
 
 Open-Meteo şehir ve hava durumu bağlantısı canlı olarak doğrulandı. Overpass bu ortamda zaman aşımı/bağlantı hatası verdi; gerçek mekân verisinin canlı alımı henüz doğrulanamadı. Mekân ayrıştırma, hata durumları ve çevrimdışı demo testleri geçti.
 
@@ -131,6 +131,16 @@ Bu komut yerel veritabanı, `.env` ve tanınabilir anahtar kalıplarını tarar;
 Kökteki `render.yaml`, React üretim derlemesini ve FastAPI'yi aynı Render Free web servisinde çalıştırır. Aynı origin kullanıldığı için yayın ortamında ayrıca CORS adresi veya frontend API alan adı yönetmek gerekmez. İlk yayın Gemini anahtarı olmadan demo ve kurallı modlarla çalışır.
 
 Render Free dosya sistemi geçicidir: çevrimiçi SQLite kayıtları yeniden başlatma, uyku veya yeniden yayınlama sonrasında silinebilir. Bu yapı portföy demosu içindir. Kalıcı kullanıcı verisi vaat etmez. Kurulum ve güvenli Gemini etkinleştirme adımları [yayınlama rehberindedir](docs/deployment.md).
+
+## Docker ile sunum
+
+Üretim sürümünün tamamını tek konteynerde yerel olarak çalıştır:
+
+```bash
+docker compose up --build
+```
+
+Ardından [http://localhost:8000](http://localhost:8000) adresini aç. Bu anahtarsız komut tam demo akışını çalıştırır. Yerelde yapılandırılmış Gemini Free Tier anahtarını image içine kopyalamadan etkinleştirmek için `docker compose --env-file backend/.env up --build` kullan. `travel-data` adlı volume, normal konteyner yeniden başlatmalarında SQLite seyahatlerini korur. Temiz bilgisayar kurulumu ve sunum günü adımları için [Docker sunum rehberine](docs/docker.md) bak.
 
 ## Function calling özeti
 

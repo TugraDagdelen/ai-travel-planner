@@ -4,7 +4,7 @@ A travel planner built with React, TypeScript, Tailwind CSS and FastAPI, with a 
 
 **Status: Phase 6 complete (v0.6.0).** This portfolio-ready local release completes the product flow, offline test suite, repository safety check, reproducible setup documentation, architecture narrative and demonstration assets. Users can generate and save a validated itinerary, inspect its Leaflet route and daily weather, reopen it from My Trips, rename it, revise a specific day from stored evidence, and delete it.
 
-Gemini 3.5 Flash-Lite is the only reviewed model allowed by this release. Live AI remains **unverified** because no key or eligible project was configured. Google Maps and Search grounding remain disabled: the reviewed pricing page does not offer them on this model's API Free tier. See [Gemini setup](docs/gemini-setup.md).
+Gemini 3.5 Flash-Lite is the only reviewed model allowed by this release. The bounded SDK connection check was verified locally on 2026-11-01 with an operator-confirmed Free Tier project; no key is stored in the repository. The complete live tool-calling itinerary loop still depends on provider availability. Google Maps and Search grounding remain disabled: the reviewed pricing page does not offer them on this model's API Free tier. See [Gemini setup](docs/gemini-setup.md).
 
 Open-Meteo city lookup and weather succeeded in live checks. The selected Overpass instance timed out and subsequently could not be reached from this environment, so live OSM retrieval remains unverified. Parsing and failure behavior passed offline tests. See [test evidence](docs/testing.md).
 
@@ -214,7 +214,7 @@ sequenceDiagram
 
 The model never calls providers directly. The backend accepts only declared tool names and validated arguments, enforces step/tool/time budgets, materializes provider-owned place data, and rejects invalid final JSON. Deterministic and demo generation use the same validators without making a model request.
 
-The Gemini agent path is implemented and covered with an offline fake-model contract, but it is not live-verified without the user's eligible key. Overpass live availability is subject to the limitation above. Phase 5's Leaflet and saved-trip product flow are complete. Google Maps/Search grounding is disabled for the reviewed model/account path.
+The Gemini connection path is live-verified with an eligible local Free Tier key, and the agent path is covered with an offline fake-model contract. A complete live tool-calling itinerary remains provider-dependent and was not claimed by the connection-only check. Overpass live availability is subject to the limitation above. Phase 5's Leaflet and saved-trip product flow are complete. Google Maps/Search grounding is disabled for the reviewed model/account path.
 
 ## Limits and privacy
 
@@ -241,6 +241,16 @@ The command scans repository files for local databases, environment files and re
 ## Free portfolio deployment
 
 The root `render.yaml` builds React and serves it with FastAPI from one Render Free web service. The first deployment needs no Gemini secret and supports demo/deterministic generation. Render's Free filesystem is ephemeral, so hosted SQLite trips can disappear after sleep, restart, or redeployment. This is an honest portfolio demo rather than durable storage. Follow the [deployment guide](docs/deployment.md) before connecting GitHub or adding a Free-tier Gemini key.
+
+## Docker presentation
+
+Run the complete production build locally in one container:
+
+```bash
+docker compose up --build
+```
+
+Then open [http://localhost:8000](http://localhost:8000). This keyless command supports the complete demo flow. To enable the locally configured Gemini Free Tier key without copying it into the image, use `docker compose --env-file backend/.env up --build`. The named `travel-data` volume preserves SQLite trips across normal container restarts. See the [Docker presentation guide](docs/docker.md) for clean-machine and presentation-day instructions.
 
 ## Roadmap
 
