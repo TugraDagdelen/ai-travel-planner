@@ -10,7 +10,7 @@ import type { Language, TripRequest } from '../types/trip'
 
 interface Remote<T> { loading: boolean; data: T | null; error: DataError | null }
 const empty = <T,>(): Remote<T> => ({ loading: false, data: null, error: null })
-const categoriesFor: Record<string, Category[]> = { culture: ['historic', 'museum'], art: ['museum'], nature: ['park'], food: ['restaurant'] }
+const categoriesFor: Record<string, Category[]> = { culture: ['historic', 'museum', 'attraction'], art: ['museum'], nature: ['park', 'attraction'], food: ['restaurant'] }
 
 function Source({ metadata, t, language }: { metadata: SourceMetadata; t: DiscoveryCopy; language: Language }) {
   return <div className="source-line">

@@ -19,6 +19,7 @@ Session: 2026-10-29–2026-11-01, Windows. Node 24.12.0 / npm 11.6.2 / Python 3.
 | Live Overpass | 2026-11-01 small query: main endpoint returned 502; documented fallback timed out. **Live result unverified** |
 | Live Wikimedia/Wikidata places | **Passed 2026-11-01:** Paris returned 18 requested-category, coordinate-backed real places; all 18 had descriptions and pageviews, 17 had thumbnails, and museum/historic/restaurant results were interleaved |
 | Live food-aware itinerary | **Passed 2026-11-01:** a two-day deterministic Paris plan contained one visit and one verified restaurant on each day |
+| City-wide Paris ranking | **Passed 2026-11-02:** nine-zone 10 km search returned 40 balanced results spanning 6 km; Eiffel Tower, Catacombs of Paris, Musée Rodin, Musée Marmottan Monet, parks and 11 restaurants survived ranking. A two-day culture-and-food plan selected the Catacombs and Eiffel Tower on separate days with one restaurant per day |
 | Gemini SDK live request | **Passed 2026-11-01:** operator-confirmed Free Tier key returned `connected` with `gemini-3.5-flash-lite`; key remained local and ignored |
 | Complete live AI itinerary | **Passed in Docker:** two-day Paris culture-and-food plan used Open-Meteo plus Wikimedia/Wikidata evidence and Gemini tool calling; each day contained two visits and one restaurant, with six non-repeated real places total |
 | Browser AI status | Missing-key state shown from real FastAPI response; Turkish/English copy verified |

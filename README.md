@@ -29,7 +29,7 @@ Rota demonstrates how to build a transparent full-stack AI product without hidin
 - Backend-validated preference summary; data stays in React memory while navigating and resets on refresh.
 - Explicit city selection, optional country filtering and ambiguous-city handling.
 - Date-aligned weather, local time zones, missing values and forecast-window handling.
-- Bounded nearby place queries from Wikimedia/Wikidata with article descriptions, thumbnails, 30-day Wikipedia interest, direct source links, attribution and coordinate/classification quality; results are interleaved across requested categories and Overpass remains a fallback.
+- City-wide place discovery scans nine overlapping center, inner-ring and outer-ring zones across a 10 km radius, then compares Wikimedia/Wikidata candidates using article descriptions, thumbnails, 30-day Wikipedia interest, category balance, distance and coordinate/classification quality; Overpass remains a fallback.
 - Independent loading/error/retry states, cached response labels, request limits and an explicit offline demo.
 - Opt-in Gemini status and connection checks with no automatic model, paid-tier or grounding fallback.
 - Bounded manual Gemini function-calling loop with an allowlisted weather/place tool registry.

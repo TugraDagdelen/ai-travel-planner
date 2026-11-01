@@ -192,7 +192,7 @@ def test_osm_parsing_provenance_deduplication_and_missing_coordinates(harness):
     query = parse_qs(calls[-1].content.decode())["data"][0]
     assert '["tourism"="museum"]' in query
     assert "out center 120" in query
-    assert "around:1500" in query
+    assert "around:10000" in query
 
 
 def test_dense_categories_use_bounded_overpass_filters(harness):
@@ -204,7 +204,7 @@ def test_dense_categories_use_bounded_overpass_filters(harness):
     )
     assert response.status_code == 200
     query = parse_qs(calls[-1].content.decode())["data"][0]
-    assert 'node(around:1500' in query
+    assert 'node(around:10000' in query
     assert '["historic"]' not in query
     assert 'monument|memorial|castle' in query
     assert "maxsize:4194304" in query
@@ -315,7 +315,16 @@ def test_wikimedia_places_are_real_typed_and_attributed():
     assert [request.url.host for request in calls] == [
         "geocoding-api.open-meteo.com",
         "en.wikipedia.org",
+        "en.wikipedia.org",
+        "en.wikipedia.org",
+        "en.wikipedia.org",
+        "en.wikipedia.org",
+        "en.wikipedia.org",
+        "en.wikipedia.org",
+        "en.wikipedia.org",
+        "en.wikipedia.org",
         "query.wikidata.org",
+        "en.wikipedia.org",
         "en.wikipedia.org",
     ]
 
@@ -394,7 +403,7 @@ def test_overpass_rate_limit_does_not_rotate(harness):
     "params",
     [
         {"categories": "raw_query"},
-        {"categories": "museum", "radius_m": 3001},
+        {"categories": "museum", "radius_m": 10001},
         {"categories": "museum", "radius_m": -1},
         {"categories": "museum", "mode": "paid"},
     ],

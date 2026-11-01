@@ -303,29 +303,55 @@ class DiscoveryService:
     async def wikimedia_places(
         self, destination: Destination, categories: list[Category], radius: int, mode: Mode
     ):
-        geo = await self.gateway.request(
-            "wikipedia_geo",
-            {
-                "action": "query",
-                "generator": "geosearch",
-                "ggsprimary": "primary",
-                "ggsnamespace": 0,
-                "ggsradius": radius,
-                "ggscoord": f"{destination.latitude}|{destination.longitude}",
-                "ggslimit": 250,
-                "prop": "coordinates|pageprops",
-                "colimit": "max",
-                "format": "json",
-                "formatversion": 2,
-            },
-            ttl=86400,
-        )
-        pages = geo.data.get("query", {}).get("pages", [])
-        if not isinstance(pages, list):
-            raise ProviderError("provider_invalid_response", "wikimedia", False)
+        anchors = [(destination.latitude, destination.longitude)]
+        scan_radius = radius
+        if radius > 5000:
+            longitude_scale = max(0.2, math.cos(math.radians(destination.latitude)))
+            for fraction in (0.2, 0.5):
+                offset_m = radius * fraction
+                latitude_offset = offset_m / 111_320
+                longitude_offset = offset_m / (111_320 * longitude_scale)
+                anchors.extend(
+                    [
+                        (destination.latitude + latitude_offset, destination.longitude),
+                        (destination.latitude - latitude_offset, destination.longitude),
+                        (destination.latitude, destination.longitude + longitude_offset),
+                        (destination.latitude, destination.longitude - longitude_offset),
+                    ]
+                )
+            scan_radius = min(10000, round(radius * 0.8))
+
+        geo_payloads = []
+        pages = []
+        scan_truncated = False
+        for latitude, longitude in anchors:
+            geo = await self.gateway.request(
+                "wikipedia_geo",
+                {
+                    "action": "query",
+                    "generator": "geosearch",
+                    "ggsprimary": "primary",
+                    "ggsnamespace": 0,
+                    "ggsradius": scan_radius,
+                    "ggscoord": f"{latitude}|{longitude}",
+                    "ggslimit": 100,
+                    "prop": "coordinates|pageprops",
+                    "colimit": "max",
+                    "format": "json",
+                    "formatversion": 2,
+                },
+                ttl=86400,
+            )
+            geo_payloads.append(geo)
+            batch = geo.data.get("query", {}).get("pages", [])
+            if not isinstance(batch, list):
+                raise ProviderError("provider_invalid_response", "wikimedia", False)
+            pages.extend(batch)
+            scan_truncated = scan_truncated or len(batch) >= 100
+        geo = geo_payloads[0]
         candidates: dict[str, tuple[int, str, float, float]] = {}
         skipped = 0
-        for page in pages[:250]:
+        for page in pages[:900]:
             try:
                 page_id = int(page["pageid"])
                 qid = page["pageprops"]["wikibase_item"]
@@ -359,19 +385,28 @@ class DiscoveryService:
                 ),
             )
         roots = {WIKIDATA_ROOTS[category]: category for category in categories}
-        item_values = " ".join(f"wd:{qid}" for qid in candidates)
         root_values = " ".join(f"wd:{qid}" for qid in roots)
-        query = (
-            "SELECT DISTINCT ?item ?root WHERE { "
-            f"VALUES ?item {{ {item_values} }} VALUES ?root {{ {root_values} }} "
-            "?item wdt:P31/wdt:P279* ?root. }"
-        )
-        typed = await self.gateway.request(
-            "wikidata_types", {"query": query, "format": "json"}, ttl=86400
-        )
-        bindings = typed.data.get("results", {}).get("bindings", [])
-        if not isinstance(bindings, list):
-            raise ProviderError("provider_invalid_response", "wikimedia", False)
+        bindings = []
+        typed_payloads = []
+        candidate_ids = list(candidates)
+        for start in range(0, len(candidate_ids), 200):
+            item_values = " ".join(
+                f"wd:{qid}" for qid in candidate_ids[start : start + 200]
+            )
+            query = (
+                "SELECT DISTINCT ?item ?root WHERE { "
+                f"VALUES ?item {{ {item_values} }} VALUES ?root {{ {root_values} }} "
+                "?item wdt:P31/wdt:P279* ?root. }"
+            )
+            typed = await self.gateway.request(
+                "wikidata_types", {"query": query, "format": "json"}, ttl=86400
+            )
+            typed_payloads.append(typed)
+            batch = typed.data.get("results", {}).get("bindings", [])
+            if not isinstance(batch, list):
+                raise ProviderError("provider_invalid_response", "wikimedia", False)
+            bindings.extend(batch)
+        typed = typed_payloads[-1]
         places: list[Place] = []
         identities: set[str] = set()
         for binding in bindings:
@@ -419,63 +454,45 @@ class DiscoveryService:
                 )
             )
         places = []
-        while any(nearby_groups.values()) and len(places) < 40:
+        while any(nearby_groups.values()) and len(places) < 300:
             for category in categories:
-                if nearby_groups[category] and len(places) < 40:
+                if nearby_groups[category] and len(places) < 300:
                     places.append(nearby_groups[category].pop(0))
 
         if places:
-            page_ids = "|".join(str(candidates[place.id.split(":", 1)[1]][0]) for place in places)
             try:
-                details = await self.gateway.request(
-                    "wikipedia_details",
-                    {
-                        "action": "query",
-                        "pageids": page_ids,
-                        "prop": "extracts|pageimages|info|pageviews",
-                        "inprop": "url",
-                        "exintro": 1,
-                        "explaintext": 1,
-                        "exsentences": 2,
-                        "exlimit": "max",
-                        "piprop": "thumbnail",
-                        "pithumbsize": 480,
-                        "pilimit": "max",
-                        "pvipdays": 30,
-                        "format": "json",
-                        "formatversion": 2,
-                    },
-                    ttl=21600,
-                )
                 by_page_id = {
                     candidates[place.id.split(":", 1)[1]][0]: place for place in places
                 }
-                detail_pages = details.data.get("query", {}).get("pages", [])
-                if not isinstance(detail_pages, list):
-                    raise ValueError("invalid Wikipedia details")
-                for page in detail_pages:
-                    place = by_page_id.get(page.get("pageid"))
-                    if place is None:
-                        continue
-                    extract = page.get("extract")
-                    full_url = page.get("fullurl")
-                    thumbnail = page.get("thumbnail", {}).get("source")
-                    pageviews = page.get("pageviews", {})
-                    if isinstance(extract, str) and extract.strip():
-                        place.description = extract.strip()[:600]
-                    if isinstance(full_url, str) and full_url.startswith("https://"):
-                        place.source_url = full_url[:1000]
-                    if isinstance(thumbnail, str) and thumbnail.startswith("https://"):
-                        place.image_url = thumbnail[:1000]
-                    if isinstance(pageviews, dict):
-                        place.pageviews_30d = sum(
-                            value
-                            for value in pageviews.values()
-                            if type(value) is int and value >= 0
-                        )
+                page_ids = list(by_page_id)
+                for start in range(0, len(page_ids), 50):
+                    popularity = await self.gateway.request(
+                        "wikipedia_details",
+                        {
+                            "action": "query",
+                            "pageids": "|".join(str(item) for item in page_ids[start : start + 50]),
+                            "prop": "pageviews",
+                            "pvipdays": 30,
+                            "format": "json",
+                            "formatversion": 2,
+                        },
+                        ttl=21600,
+                    )
+                    batch = popularity.data.get("query", {}).get("pages", [])
+                    if not isinstance(batch, list):
+                        raise ValueError("invalid Wikipedia popularity")
+                    for page in batch:
+                        place = by_page_id.get(page.get("pageid"))
+                        pageviews = page.get("pageviews", {})
+                        if place is not None and isinstance(pageviews, dict):
+                            place.pageviews_30d = sum(
+                                value
+                                for value in pageviews.values()
+                                if type(value) is int and value >= 0
+                            )
             except (ProviderError, KeyError, TypeError, ValueError, AttributeError):
-                # Descriptions and interest counts enrich results, but their absence must not
-                # turn verified coordinates and categories into an outage.
+                # Popularity enriches ranking, but its absence must not turn verified
+                # coordinates and categories into an outage.
                 pass
 
         grouped = {category: [] for category in categories}
@@ -490,15 +507,58 @@ class DiscoveryService:
                 )
             )
         places = []
-        while any(grouped.values()):
+        while any(grouped.values()) and len(places) < 40:
             for category in categories:
-                if grouped[category]:
+                if grouped[category] and len(places) < 40:
                     places.append(grouped[category].pop(0))
+
+        if places:
+            try:
+                by_page_id = {
+                    candidates[place.id.split(":", 1)[1]][0]: place for place in places
+                }
+                details = await self.gateway.request(
+                    "wikipedia_details",
+                    {
+                        "action": "query",
+                        "pageids": "|".join(str(item) for item in by_page_id),
+                        "prop": "extracts|pageimages|info",
+                        "inprop": "url",
+                        "exintro": 1,
+                        "explaintext": 1,
+                        "exsentences": 2,
+                        "exlimit": "max",
+                        "piprop": "thumbnail",
+                        "pithumbsize": 480,
+                        "pilimit": "max",
+                        "format": "json",
+                        "formatversion": 2,
+                    },
+                    ttl=21600,
+                )
+                detail_pages = details.data.get("query", {}).get("pages", [])
+                if not isinstance(detail_pages, list):
+                    raise ValueError("invalid Wikipedia details")
+                for page in detail_pages:
+                    place = by_page_id.get(page.get("pageid"))
+                    if place is None:
+                        continue
+                    extract = page.get("extract")
+                    full_url = page.get("fullurl")
+                    thumbnail = page.get("thumbnail", {}).get("source")
+                    if isinstance(extract, str) and extract.strip():
+                        place.description = extract.strip()[:600]
+                    if isinstance(full_url, str) and full_url.startswith("https://"):
+                        place.source_url = full_url[:1000]
+                    if isinstance(thumbnail, str) and thumbnail.startswith("https://"):
+                        place.image_url = thumbnail[:1000]
+            except (ProviderError, KeyError, TypeError, ValueError, AttributeError):
+                pass
         return PlacesResponse(
             destination_id=destination.id,
             places=places[:40],
             radius_m=radius,
-            truncated=len(pages) >= 250 or total_place_count > 40,
+            truncated=scan_truncated or total_place_count > 40,
             skipped_records=skipped,
             metadata=self.metadata(
                 mode,

@@ -23,8 +23,8 @@ export async function fetchWeather(destinationId: string, start: string, end: st
 }
 
 export async function fetchPlaces(destinationId: string, categories: Category[], mode: DataMode, signal: AbortSignal) {
-  const params = new URLSearchParams({ destination_id: destinationId, radius_m: '1500', mode })
+  const params = new URLSearchParams({ destination_id: destinationId, radius_m: '10000', mode })
   categories.forEach(category => params.append('categories', category))
-  const { data } = await api.get<PlacesResponse>('/places', { params, signal, timeout: 50000 })
+  const { data } = await api.get<PlacesResponse>('/places', { params, signal, timeout: 75000 })
   return data
 }

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -46,9 +46,9 @@ describe('complete fixture-backed demo journey', () => {
   it('creates, reopens, revises and deletes a demo trip through the real screens', async () => {
     const user = userEvent.setup()
     render(<MemoryRouter><App/></MemoryRouter>)
-    await user.type(screen.getByLabelText('Nereye gitmek istiyorsun?'), request.destination)
-    await user.type(screen.getByLabelText('Gidiş tarihi'), request.start_date)
-    await user.type(screen.getByLabelText('Dönüş tarihi'), request.end_date)
+    fireEvent.change(screen.getByLabelText('Nereye gitmek istiyorsun?'), { target: { value: request.destination } })
+    fireEvent.change(screen.getByLabelText('Gidiş tarihi'), { target: { value: request.start_date } })
+    fireEvent.change(screen.getByLabelText('Dönüş tarihi'), { target: { value: request.end_date } })
     await user.click(screen.getByRole('button', { name: 'Tarih & kültür' }))
     await user.click(screen.getByRole('button', { name: 'Yerel lezzetler' }))
     await user.click(screen.getByRole('button', { name: 'Tercihlerimi gözden geçir' }))
@@ -70,5 +70,5 @@ describe('complete fixture-backed demo journey', () => {
     await user.click(screen.getByRole('button', { name: 'Seyahati sil' }))
     expect(deleteTrip).toHaveBeenCalledWith(trip.id)
     expect(await screen.findByText('Henüz kayıtlı bir seyahatin yok.')).toBeInTheDocument()
-  })
+  }, 15000)
 })

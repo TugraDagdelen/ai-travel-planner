@@ -49,7 +49,7 @@ async def places(
     request: Request,
     destination_id: Annotated[str, Query(min_length=1, max_length=80)],
     categories: Annotated[list[Category], Query(min_length=1, max_length=5)],
-    radius_m: Annotated[int, Query(ge=250, le=3000)] = 1500,
+    radius_m: Annotated[int, Query(ge=250, le=10000)] = 10000,
     mode: Mode = "live",
 ):
     service = request.app.state.discovery

@@ -27,7 +27,7 @@ from app.schemas.itinerary import (
 from app.services.gemini import AIError
 
 CATEGORIES: dict[str, list[Category]] = {
-    "culture": ["historic", "museum"],
+    "culture": ["historic", "museum", "attraction"],
     "art": ["museum"],
     "nature": ["park", "attraction"],
     "food": ["restaurant"],
@@ -50,7 +50,7 @@ class PlacesArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
     destination_id: str
     categories: list[Category] = Field(min_length=1, max_length=5)
-    radius_m: int = Field(default=1500, ge=250, le=3000)
+    radius_m: int = Field(default=10000, ge=250, le=10000)
 
 
 TOOL_DECLARATIONS = [
@@ -114,7 +114,7 @@ class ToolRegistry:
                 args = PlacesArgs(
                     destination_id=self.body.destination_id,
                     categories=self.categories,
-                    radius_m=1500,
+                    radius_m=10000,
                 )
                 requested = args.categories
                 key = f"places:{args.model_dump_json()}"
@@ -171,7 +171,7 @@ class ToolRegistry:
             {
                 "destination_id": self.body.destination_id,
                 "categories": self.categories,
-                "radius_m": 1500,
+                "radius_m": 10000,
             },
         )
 
@@ -203,7 +203,7 @@ def score(place: Place, interests: list[str], rainy: bool) -> float:
     values.append((35, 1.0 if place.category in preferred else 0.0))
     values.append((20, 1.0 if place.classification_basis in {"osm_tag", "synthetic"} else 0.65))
     if place.distance_m is not None:
-        values.append((20, max(0.0, 1 - place.distance_m / 3000)))
+        values.append((20, max(0.0, 1 - place.distance_m / 10000)))
     if place.pageviews_30d is not None:
         # Wikipedia readership is an interest signal, not a quality score or review rating.
         values.append((15, min(1.0, place.pageviews_30d / 50_000)))
