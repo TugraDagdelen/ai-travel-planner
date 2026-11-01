@@ -192,6 +192,21 @@ def test_osm_parsing_provenance_deduplication_and_missing_coordinates(harness):
     assert "around:1500" in query
 
 
+def test_dense_categories_use_bounded_overpass_filters(harness):
+    client, calls, _ = harness
+    identifier = select(client)
+    response = client.get(
+        "/api/places",
+        params={"destination_id": identifier, "categories": ["historic", "restaurant"]},
+    )
+    assert response.status_code == 200
+    query = parse_qs(calls[-1].content.decode())["data"][0]
+    assert 'node(around:1500' in query
+    assert '["historic"]' not in query
+    assert 'monument|memorial|castle' in query
+    assert "maxsize:4194304" in query
+
+
 def test_empty_and_truncated_places_are_explicit(harness):
     client, _, responses = harness
     identifier = select(client)

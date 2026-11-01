@@ -74,6 +74,22 @@ describe('real data discovery', () => {
     expect(searchDestinations).toHaveBeenCalledWith('Paris', '', 'en', 'demo', expect.any(AbortSignal))
   })
 
+  it('recovers from a live place timeout by explicitly switching the whole selection to demo', async () => {
+    const onSelectionChange = vi.fn()
+    vi.mocked(fetchPlaces)
+      .mockRejectedValueOnce(new Error('timeout'))
+      .mockResolvedValueOnce({ destination_id: 'demo:paris', radius_m: 1500, result_limit: 40, truncated: false, skipped_records: 0, metadata: { ...metadata, mode: 'demo', source: 'Synthetic demo', source_url: null }, places: [{ id: 'demo:museum', name: 'Demo · museum', category: 'museum', latitude: 48.851, longitude: 2.35, coordinate_kind: 'synthetic', distance_m: 111, indoor: 'unknown', classification_basis: 'synthetic', source_url: null }] })
+    render(<DiscoveryPanel request={request} language="en" onSelectionChange={onSelectionChange}/>)
+    const user = await chooseCity()
+    vi.mocked(searchDestinations).mockResolvedValueOnce({ destinations: [{ ...cities.destinations[0], id: 'demo:paris' }], metadata: { ...metadata, mode: 'demo', source: 'Synthetic demo', source_url: null } })
+    await user.click(await screen.findByRole('button', { name: 'Continue with demo data' }))
+    expect(await screen.findByText('Demo · museum')).toBeInTheDocument()
+    expect(screen.getByText(/DEMO · Weather and places are synthetic/)).toBeInTheDocument()
+    expect(searchDestinations).toHaveBeenLastCalledWith('Paris', 'FR', 'en', 'demo', expect.any(AbortSignal))
+    expect(fetchWeather).toHaveBeenLastCalledWith('demo:paris', '2027-02-01', '2027-02-02', 'demo', expect.any(AbortSignal))
+    expect(onSelectionChange).toHaveBeenLastCalledWith(expect.objectContaining({ mode: 'demo' }))
+  })
+
   it('discards an old response after switching modes', async () => {
     let resolveWeather!: (value: WeatherResponse) => void
     vi.mocked(fetchWeather).mockReturnValue(new Promise(resolve => { resolveWeather = resolve }))

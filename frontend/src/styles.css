@@ -179,6 +179,7 @@ input[type="date"]::-webkit-calendar-picker-indicator { cursor: pointer; opacity
 .empty-data, .data-loading { font-size: 12px; padding: 18px; border-radius: 8px; background: #eef0e6; color: #6b7864; margin-top: 15px; line-height: 1.7; }
 .data-error { background: #fbefe7; color: #8a5035; padding: 17px; border-radius: 9px; border: 1px solid #ebd3c3; font-size: 12px; line-height: 1.7; margin-top: 16px; }
 .data-error button { border: 1px solid #c49c84; background: #fffefa; color: inherit; padding: 8px 12px; display: flex; align-items: center; gap: 7px; border-radius: 6px; font-size: 11px; margin-top: 10px; }
+.error-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .discovery-footnote { font-size: 11px; color: #6b7864; line-height: 1.8; padding: 20px 0 0; border-top: 1px solid #dce1d1; margin-top: 28px; }
 .itinerary-panel { border-top: 1px solid #dce1d1; margin-top: 42px; padding-top: 36px; }
 .itinerary-panel > h2 { display: flex; align-items: center; gap: 10px; font: 400 31px/1.2 Georgia, serif; letter-spacing: -.8px; margin: 12px 0; }

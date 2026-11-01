@@ -3,14 +3,14 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
 import { ItineraryPanel } from '../src/components/ItineraryPanel'
-import { generateTrip, reviseTrip } from '../src/services/itinerary'
+import { generateTrip, reviseTrip, tripError } from '../src/services/itinerary'
 import type { TripRecord } from '../src/types/itinerary'
 import type { TripRequest } from '../src/types/trip'
 
 vi.mock('../src/services/itinerary', () => ({
   generateTrip: vi.fn(),
   reviseTrip: vi.fn(),
-  tripError: () => ({ code: 'unknown', message: 'failed', retryable: false }),
+  tripError: vi.fn(() => ({ code: 'unknown', message: 'failed', retryable: false })),
 }))
 vi.mock('../src/components/ItineraryMap', () => ({ ItineraryMap: () => <div>map</div> }))
 
@@ -42,7 +42,10 @@ const trip: TripRecord = {
 }
 
 describe('ItineraryPanel', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(tripError).mockReturnValue({ code: 'unknown', message: 'failed', retryable: false })
+  })
 
   it('requires a city selection', () => {
     render(<ItineraryPanel request={request} language="tr" selection={null}/>)
@@ -63,5 +66,15 @@ describe('ItineraryPanel', () => {
     await user.click(screen.getByRole('button', { name: 'Değişikliği uygula' }))
     expect(reviseTrip).toHaveBeenCalledWith('trip-1', 'İlk iki durağı değiştir')
     expect(await screen.findAllByText(/Sürüm 2/)).not.toHaveLength(0)
+  })
+
+  it('explains a live place outage without showing the generic English API message', async () => {
+    vi.mocked(generateTrip).mockRejectedValue(new Error('provider timeout'))
+    vi.mocked(tripError).mockReturnValue({ code: 'provider_timeout', message: 'The requested itinerary operation could not be completed.', retryable: true })
+    const user = userEvent.setup()
+    render(<MemoryRouter><ItineraryPanel request={request} language="tr" selection={{ destination, mode: 'live' }}/></MemoryRouter>)
+    await user.click(screen.getByRole('button', { name: 'Planı oluştur ve kaydet' }))
+    expect(await screen.findByText(/Canlı mekân kaynağına ulaşılamadı/)).toBeInTheDocument()
+    expect(screen.queryByText('The requested itinerary operation could not be completed.')).not.toBeInTheDocument()
   })
 })

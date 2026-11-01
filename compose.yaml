@@ -15,6 +15,7 @@ services:
       GEMINI_MODEL: "${GEMINI_MODEL:-gemini-3.5-flash-lite}"
       GEMINI_FREE_TIER_CONFIRMED: "${GEMINI_FREE_TIER_CONFIRMED:-false}"
       GEMINI_TIMEOUT_SECONDS: "60"
+      PROVIDER_TIMEOUT_SECONDS: "45"
       DATABASE_URL: sqlite:////app/data/travel_planner.db
     volumes:
       - travel-data:/app/data

@@ -22,11 +22,17 @@ from app.services.demo import DEMO_DESTINATIONS
 from app.services.gateway import Gateway, ProviderError
 
 CATEGORY_FILTERS = {
-    "museum": '["tourism"="museum"]',
-    "historic": '["historic"]',
-    "park": '["leisure"="park"]',
-    "attraction": '["tourism"="attraction"]',
-    "restaurant": '["amenity"="restaurant"]',
+    "museum": ('nwr', '["tourism"="museum"]'),
+    # Avoid every historic-tagged building in dense cities. These values are useful
+    # visitor destinations and keep the public Overpass query within a sane budget.
+    "historic": (
+        'nwr',
+        '["historic"~"^(monument|memorial|castle|archaeological_site|ruins|city_gate|fort|manor|palace)$"]',
+    ),
+    "park": ('nwr', '["leisure"="park"]'),
+    "attraction": ('nwr', '["tourism"="attraction"]'),
+    # Restaurant areas/buildings are numerous and nodes provide enough candidates.
+    "restaurant": ('node', '["amenity"="restaurant"]'),
 }
 WEATHER_FIELDS = {
     "temperature_2m_min": ("temperature_min", -100, 70, "°C"),
@@ -251,11 +257,11 @@ class DiscoveryService:
                 metadata=self.metadata(mode, "", ""),
             )
         filters = "".join(
-            f"nwr(around:{radius},{destination.latitude},{destination.longitude})"
-            f'{CATEGORY_FILTERS[category]}["name"];'
+            f"{CATEGORY_FILTERS[category][0]}(around:{radius},{destination.latitude},"
+            f'{destination.longitude}){CATEGORY_FILTERS[category][1]}["name"];'
             for category in categories
         )
-        query = f"[out:json][timeout:15][maxsize:8388608];({filters});out center 120;"
+        query = f"[out:json][timeout:12][maxsize:4194304];({filters});out center 120;"
         payload = await self.gateway.request("overpass", {"data": query}, ttl=3600)
         elements = payload.data.get("elements")
         if not isinstance(elements, list):

@@ -22,9 +22,9 @@ function Source({ metadata, t, language }: { metadata: SourceMetadata; t: Discov
   </div>
 }
 
-function ErrorNotice({ error, retry, t }: { error: DataError; retry: () => void; t: DiscoveryCopy }) {
+function ErrorNotice({ error, retry, t, useDemo }: { error: DataError; retry: () => void; t: DiscoveryCopy; useDemo?: () => void }) {
   const known = error.code in t ? t[error.code as keyof DiscoveryCopy] : t.genericError
-  return <div className="data-error" role="alert"><p>{known}</p>{error.retryAfter > 0 && <p>{error.retryAfter} {t.seconds}</p>}<button type="button" onClick={retry}><RefreshCw size={14}/>{t.retry}</button></div>
+  return <div className="data-error" role="alert"><p>{known}</p>{error.retryAfter > 0 && <p>{error.retryAfter} {t.seconds}</p>}<div className="error-actions"><button type="button" onClick={retry}><RefreshCw size={14}/>{t.retry}</button>{useDemo && <button type="button" onClick={useDemo}><MapPin size={14}/>{t.useDemo}</button>}</div></div>
 }
 
 function condition(code: number | null, t: DiscoveryCopy): string {
@@ -48,6 +48,7 @@ export function DiscoveryPanel({ request, language, onSelectionChange }: { reque
   const [selected, setSelected] = useState<Destination | null>(null)
   const [weather, setWeather] = useState<Remote<WeatherResponse>>(empty)
   const [places, setPlaces] = useState<Remote<PlacesResponse>>(empty)
+  const [switchingDemo, setSwitchingDemo] = useState(false)
   const controllers = useRef<Partial<Record<'search' | 'weather' | 'places', AbortController>>>({})
   const epoch = useRef(0)
   const categories = [...new Set(request.interests.flatMap(interest => categoriesFor[interest]))]
@@ -86,33 +87,53 @@ export function DiscoveryPanel({ request, language, onSelectionChange }: { reque
     }
   }
 
-  async function loadWeather(destination: Destination) {
+  async function loadWeather(destination: Destination, dataMode: DataMode = mode) {
     const controller = controllerFor('weather')
     setWeather({ loading: true, data: null, error: null })
     try {
-      const data = await fetchWeather(destination.id, request.start_date, request.end_date, mode, controller.signal)
+      const data = await fetchWeather(destination.id, request.start_date, request.end_date, dataMode, controller.signal)
       if (!controller.signal.aborted) setWeather({ loading: false, data, error: null })
     } catch (error) {
       if (!controller.signal.aborted) setWeather({ loading: false, data: null, error: dataError(error) })
     }
   }
 
-  async function loadPlaces(destination: Destination) {
+  async function loadPlaces(destination: Destination, dataMode: DataMode = mode) {
     const controller = controllerFor('places')
     setPlaces({ loading: true, data: null, error: null })
     try {
-      const data = await fetchPlaces(destination.id, categories, mode, controller.signal)
+      const data = await fetchPlaces(destination.id, categories, dataMode, controller.signal)
       if (!controller.signal.aborted) setPlaces({ loading: false, data, error: null })
     } catch (error) {
       if (!controller.signal.aborted) setPlaces({ loading: false, data: null, error: dataError(error) })
     }
   }
 
-  function choose(destination: Destination) {
+  function choose(destination: Destination, dataMode: DataMode = mode) {
     setSelected(destination)
-    onSelectionChange?.({ destination, mode })
-    void loadWeather(destination)
-    void loadPlaces(destination)
+    onSelectionChange?.({ destination, mode: dataMode })
+    void loadWeather(destination, dataMode)
+    void loadPlaces(destination, dataMode)
+  }
+
+  async function continueWithDemo() {
+    if (!selected || switchingDemo) return
+    epoch.current++
+    Object.values(controllers.current).forEach(controller => controller?.abort())
+    setSwitchingDemo(true); setMode('demo'); setWeather(empty()); setPlaces(empty()); onSelectionChange?.(null)
+    const controller = controllerFor('search')
+    try {
+      const data = await searchDestinations(selected.name, selected.country_code, language, 'demo', controller.signal)
+      if (controller.signal.aborted) return
+      setSearch({ loading: false, data, error: null })
+      const destination = data.destinations.find(item => item.country_code === selected.country_code) || data.destinations[0]
+      if (!destination) { setSearch({ loading: false, data: null, error: { code: 'provider_invalid_response', retryAfter: 0 } }); setSelected(null); return }
+      choose(destination, 'demo')
+    } catch (error) {
+      if (!controller.signal.aborted) { setSearch({ loading: false, data: null, error: dataError(error) }); setSelected(null) }
+    } finally {
+      if (!controller.signal.aborted) setSwitchingDemo(false)
+    }
   }
 
   const formatDay = (day: string) => new Date(`${day}T12:00:00Z`).toLocaleDateString(language === 'tr' ? 'tr-TR' : 'en-GB', { day: 'numeric', month: 'short', weekday: 'short', timeZone: 'UTC' })
@@ -141,7 +162,8 @@ export function DiscoveryPanel({ request, language, onSelectionChange }: { reque
       </section>
       <section className="data-section" aria-label={t.places}><h3><MapPin size={20}/>{t.places}</h3><p className="section-hint">{t.placeHint}</p>
         {places.loading && <p role="status" className="data-loading">{t.loadingPlaces}</p>}
-        {places.error && <ErrorNotice error={places.error} retry={() => void loadPlaces(selected)} t={t}/>}
+        {places.error && <ErrorNotice error={places.error} retry={() => void loadPlaces(selected)} t={t} useDemo={mode === 'live' ? () => void continueWithDemo() : undefined}/>}
+        {switchingDemo && <p role="status" className="data-loading">{t.switchingDemo}</p>}
         {places.data && <>
           {!places.data.places.length && <p className="empty-data" role="status">{t.noPlaces}</p>}
           <div className="place-results">{places.data.places.map(place => <article className="place-result" key={place.id}><div className="place-result-top"><span className="place-category">{t[place.category]}</span>{place.distance_m !== null && <span>{place.distance_m} m</span>}</div><h4>{place.name}</h4><p>{t[place.indoor]}{place.classification_basis === 'category_inference' ? ` · ${t.inferred}` : place.classification_basis === 'osm_tag' ? ` · ${t.osm_tag}` : ''}</p>{place.coordinate_kind === 'unknown' && <p className="place-caveat">{t.noCoordinates}</p>}{place.coordinate_kind === 'geometry_center' && <p className="place-caveat">{t.geometryCenter}</p>}{place.source_url && <a href={place.source_url} target="_blank" rel="noopener noreferrer">{t.osmLink}<ExternalLink size={13}/></a>}</article>)}</div>
