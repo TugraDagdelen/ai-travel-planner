@@ -63,6 +63,9 @@ class Place(BaseModel):
     indoor: Literal["indoor", "outdoor", "unknown"] = "unknown"
     classification_basis: Literal["osm_tag", "category_inference", "unknown", "synthetic"]
     source_url: str | None = None
+    description: str | None = Field(default=None, max_length=600)
+    image_url: str | None = Field(default=None, max_length=1000)
+    pageviews_30d: int | None = Field(default=None, ge=0)
     tags: dict[str, str] = {}
 
 

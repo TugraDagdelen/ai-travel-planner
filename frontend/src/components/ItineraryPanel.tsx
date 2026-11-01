@@ -21,7 +21,7 @@ export function ItineraryPanel({ request, language, selection }: { request: Trip
   const hint = mode === 'ai' ? t.aiHint : mode === 'demo' ? t.demoHint : t.deterministicHint
   function message(code: string, fallback: string) {
     if (['missing_api_key', 'free_tier_unconfirmed', 'model_not_reviewed'].includes(code)) return t.missingKey
-    if (code === 'insufficient_place_evidence') return t.insufficient
+    if (['insufficient_place_evidence', 'insufficient_food_evidence'].includes(code)) return t.insufficient
     if (['provider_timeout', 'provider_unavailable', 'provider_rate_limited', 'local_request_limit'].includes(code)) return t.placeSourceUnavailable
     if (['ai_timeout', 'ai_provider_unavailable', 'ai_quota_exhausted', 'ai_local_limit', 'ai_busy'].includes(code)) return t.aiUnavailable
     return fallback || t.failed

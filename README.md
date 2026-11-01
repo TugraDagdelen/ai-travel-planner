@@ -29,14 +29,14 @@ Rota demonstrates how to build a transparent full-stack AI product without hidin
 - Backend-validated preference summary; data stays in React memory while navigating and resets on refresh.
 - Explicit city selection, optional country filtering and ambiguous-city handling.
 - Date-aligned weather, local time zones, missing values and forecast-window handling.
-- Bounded nearby place queries from Wikimedia/Wikidata with source links, attribution and coordinate/classification quality; Overpass remains a fallback.
+- Bounded nearby place queries from Wikimedia/Wikidata with article descriptions, thumbnails, 30-day Wikipedia interest, direct source links, attribution and coordinate/classification quality; results are interleaved across requested categories and Overpass remains a fallback.
 - Independent loading/error/retry states, cached response labels, request limits and an explicit offline demo.
 - Opt-in Gemini status and connection checks with no automatic model, paid-tier or grounding fallback.
 - Bounded manual Gemini function-calling loop with an allowlisted weather/place tool registry.
-- Deterministic, evidence-based itinerary generation when AI is not selected; no silent fallback.
+- Deterministic, evidence-based itinerary generation when AI is not selected; food requests require one verified restaurant per day and render food separately from visits; no silent fallback.
 - Exact date coverage, known-place enforcement, duplicate checks, weather alternatives and source metadata.
 - SQLite persistence plus list/get/rename/delete APIs and natural-language revision using stored evidence.
-- Interactive OpenStreetMap/Leaflet route linked to the daily timeline, source citations and keyless Google Maps direction URLs for verified non-demo coordinates.
+- Interactive OpenStreetMap/Leaflet route linked to the daily timeline, source citations and keyless Google Maps view/direction URLs for verified non-demo coordinates.
 - Complete My Trips UI with loading/error/empty states, reopen, rename, revision history and deletion confirmation.
 - Idempotent generation prevents a repeated submit from creating duplicate saved trips.
 - Safe handling for missing/rejected keys, quotas, timeouts, invalid output and provider outages.
@@ -226,7 +226,7 @@ Do not expose the development servers publicly. No billing is configured, no pai
 
 ## Attribution and data use
 
-Live city and weather data come from Open-Meteo under its published terms. Place discovery uses coordinate-backed Wikipedia pages classified through Wikidata, with record links and contributor attribution; the data is available under the sources' respective licenses. Overpass is retained as a bounded fallback. Map tiles remain attributed to © OpenStreetMap contributors. Google Maps URLs are ordinary keyless navigation links, not Places or grounding API calls. Provider responses may be incomplete and remain subject to provider quotas, retention terms and licenses.
+Live city and weather data come from Open-Meteo under its published terms. Place discovery uses coordinate-backed Wikipedia pages classified through Wikidata, enriched with article extracts, thumbnails and 30-day pageviews, with contributor attribution; the data is available under the sources' respective licenses. Pageviews are labelled as an interest signal, never a rating. Overpass is retained as a bounded fallback. Map tiles remain attributed to © OpenStreetMap contributors. Google Maps URLs are ordinary keyless view/navigation links, not Places or grounding API calls. Google ratings are neither fetched nor sorted because the official Places API requires billing. Provider responses may be incomplete and remain subject to provider quotas, retention terms and licenses.
 
 ## Reproducible verification
 

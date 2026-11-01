@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import { CheckCircle2, CloudSun, ExternalLink, MapPin, RefreshCw, Search } from 'lucide-react'
+import { CheckCircle2, CloudSun, ExternalLink, MapPin, Navigation, RefreshCw, Search } from 'lucide-react'
 import { discoveryCopy } from '../i18n/discovery'
 import type { DiscoveryCopy } from '../i18n/discovery'
 import { dataError, fetchPlaces, fetchWeather, searchDestinations } from '../services/discovery'
@@ -137,6 +137,7 @@ export function DiscoveryPanel({ request, language, onSelectionChange }: { reque
   }
 
   const formatDay = (day: string) => new Date(`${day}T12:00:00Z`).toLocaleDateString(language === 'tr' ? 'tr-TR' : 'en-GB', { day: 'numeric', month: 'short', weekday: 'short', timeZone: 'UTC' })
+  const formatNumber = (value: number) => new Intl.NumberFormat(language === 'tr' ? 'tr-TR' : 'en-GB').format(value)
 
   return <section className="discovery-panel" aria-label={t.title}>
     <span className="tiny-eyebrow">{t.eyebrow}</span><h2>{t.title}</h2><p className="discovery-intro">{t.intro}</p>
@@ -166,7 +167,7 @@ export function DiscoveryPanel({ request, language, onSelectionChange }: { reque
         {switchingDemo && <p role="status" className="data-loading">{t.switchingDemo}</p>}
         {places.data && <>
           {!places.data.places.length && <p className="empty-data" role="status">{t.noPlaces}</p>}
-          <div className="place-results">{places.data.places.map(place => <article className="place-result" key={place.id}><div className="place-result-top"><span className="place-category">{t[place.category]}</span>{place.distance_m !== null && <span>{place.distance_m} m</span>}</div><h4>{place.name}</h4><p>{t[place.indoor]}{place.classification_basis === 'category_inference' ? ` · ${t.inferred}` : place.classification_basis === 'osm_tag' ? ` · ${t.osm_tag}` : ''}</p>{place.coordinate_kind === 'unknown' && <p className="place-caveat">{t.noCoordinates}</p>}{place.coordinate_kind === 'geometry_center' && <p className="place-caveat">{t.geometryCenter}</p>}{place.source_url && <a href={place.source_url} target="_blank" rel="noopener noreferrer">{t.osmLink}<ExternalLink size={13}/></a>}</article>)}</div>
+          <div className="place-results">{places.data.places.map(place => <article className="place-result" key={place.id}>{place.image_url && <img className="place-image" src={place.image_url} alt="" loading="lazy" referrerPolicy="no-referrer"/>}<div className="place-result-body"><div className="place-result-top"><span className="place-category">{t[place.category]}</span>{place.distance_m !== null && <span>{place.distance_m} m</span>}</div><h4>{place.name}</h4><p className="place-description">{place.description || t.noDescription}</p>{place.pageviews_30d !== null && place.pageviews_30d !== undefined && <p className="place-interest"><strong>{formatNumber(place.pageviews_30d)}</strong> · {t.wikiInterest}</p>}<p>{t[place.indoor]}{place.classification_basis === 'category_inference' ? ` · ${t.inferred}` : place.classification_basis === 'osm_tag' ? ` · ${t.osm_tag}` : ''}</p>{place.coordinate_kind === 'unknown' && <p className="place-caveat">{t.noCoordinates}</p>}{place.coordinate_kind === 'geometry_center' && <p className="place-caveat">{t.geometryCenter}</p>}<div className="place-card-links">{place.source_url && <a href={place.source_url} target="_blank" rel="noopener noreferrer">{t.osmLink}<ExternalLink size={13}/></a>}{place.latitude !== null && place.longitude !== null && <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${place.name} ${place.latitude},${place.longitude}`)}`} target="_blank" rel="noopener noreferrer">{t.googleMaps}<Navigation size={13}/></a>}</div></div></article>)}</div>
           {places.data.truncated && <p className="section-hint">{t.truncated}</p>}{places.data.skipped_records > 0 && <p className="section-hint">{t.skipped}</p>}
           <Source metadata={places.data.metadata} t={t} language={language}/>
         </>}

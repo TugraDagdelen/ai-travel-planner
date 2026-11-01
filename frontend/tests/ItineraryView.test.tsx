@@ -11,6 +11,7 @@ vi.mock('../src/components/ItineraryMap', () => ({
 
 const liveMuseum: Place = { id: 'osm:node:1', name: 'Live Museum', category: 'museum', latitude: 41.01, longitude: 28.97, coordinate_kind: 'node', distance_m: 100, indoor: 'indoor', classification_basis: 'osm_tag', source_url: 'https://www.openstreetmap.org/node/1' }
 const livePark: Place = { id: 'osm:way:2', name: 'Live Park', category: 'park', latitude: 41.02, longitude: 28.98, coordinate_kind: 'geometry_center', distance_m: 300, indoor: 'outdoor', classification_basis: 'osm_tag', source_url: 'https://www.openstreetmap.org/way/2' }
+const liveRestaurant: Place = { id: 'wikidata:3', name: 'Live Restaurant', category: 'restaurant', latitude: 41.03, longitude: 28.99, coordinate_kind: 'node', distance_m: 450, indoor: 'unknown', classification_basis: 'category_inference', source_url: 'https://en.wikipedia.org/wiki/Live_Restaurant', description: 'A notable local restaurant.', pageviews_30d: 2500 }
 
 const trip: TripRecord = {
   id: 'trip-live', title: 'İstanbul kültür rotası', request: { destination: 'İstanbul', start_date: '2027-02-01', end_date: '2027-02-01', interests: ['culture'], budget: 'economy', pace: 'relaxed', language: 'tr', notes: '' },
@@ -38,5 +39,14 @@ describe('ItineraryView map and evidence links', () => {
     render(<ItineraryView trip={demoTrip} language="tr"/>)
     expect(await screen.findByText(/Sentetik demo konumu/)).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /Google Maps ile yol tarifi/ })).not.toBeInTheDocument()
+  })
+
+  it('separates daily visits from food and shows rich source context', async () => {
+    const foodTrip: TripRecord = { ...trip, request: { ...trip.request, interests: ['culture', 'food'] }, days: [{ ...trip.days[0], activities: [...trip.days[0].activities, { period: 'evening', place: liveRestaurant, reason: 'Akşam yemeği.' }] }] }
+    render(<ItineraryView trip={foodTrip} language="tr"/>)
+    expect(await screen.findByRole('heading', { name: 'Gezilecek yerler' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Yemek' })).toBeInTheDocument()
+    expect(screen.getByText('A notable local restaurant.')).toBeInTheDocument()
+    expect(screen.getByText(/2\.500 · 30 günlük Wikipedia ilgisi/)).toBeInTheDocument()
   })
 })

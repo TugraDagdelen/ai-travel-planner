@@ -245,17 +245,18 @@ class DiscoveryService:
         if mode == "demo":
             places = [
                 Place(
-                    id=f"demo:{category}",
-                    name=f"Demo · {category}",
+                    id=f"demo:{category}:{variant + 1}",
+                    name=f"Demo · {category} {variant + 1}",
                     category=category,
-                    latitude=destination.latitude + (i + 1) * 0.001,
-                    longitude=destination.longitude,
+                    latitude=destination.latitude + (i * 2 + variant + 1) * 0.001,
+                    longitude=destination.longitude + variant * 0.001,
                     coordinate_kind="synthetic",
-                    distance_m=111 * (i + 1),
+                    distance_m=111 * (i * 2 + variant + 1),
                     classification_basis="synthetic",
                 )
                 for i, category in enumerate(categories)
-                if 111 * (i + 1) <= radius
+                for variant in range(2)
+                if 111 * (i * 2 + variant + 1) <= radius
             ]
             return PlacesResponse(
                 destination_id=destination.id,
@@ -322,16 +323,18 @@ class DiscoveryService:
         pages = geo.data.get("query", {}).get("pages", [])
         if not isinstance(pages, list):
             raise ProviderError("provider_invalid_response", "wikimedia", False)
-        candidates: dict[str, tuple[str, float, float]] = {}
+        candidates: dict[str, tuple[int, str, float, float]] = {}
         skipped = 0
         for page in pages[:250]:
             try:
+                page_id = int(page["pageid"])
                 qid = page["pageprops"]["wikibase_item"]
                 coordinates = page["coordinates"][0]
                 name = page["title"].strip()[:200]
                 lat, lon = float(coordinates["lat"]), float(coordinates["lon"])
                 if (
-                    not name
+                    page_id <= 0
+                    or not name
                     or not isinstance(qid, str)
                     or not qid.startswith("Q")
                     or not qid[1:].isdigit()
@@ -339,7 +342,7 @@ class DiscoveryService:
                     or not -180 <= lon <= 180
                 ):
                     raise ValueError("invalid Wikimedia place")
-                candidates[qid] = (name, lat, lon)
+                candidates[qid] = (page_id, name, lat, lon)
             except (KeyError, IndexError, TypeError, ValueError, AttributeError):
                 skipped += 1
         if not candidates:
@@ -377,7 +380,7 @@ class DiscoveryService:
                 root = binding["root"]["value"].rsplit("/", 1)[-1]
                 if qid in identities or qid not in candidates or root not in roots:
                     continue
-                name, lat, lon = candidates[qid]
+                _page_id, name, lat, lon = candidates[qid]
                 meters = distance(destination.latitude, destination.longitude, lat, lon)
                 if meters > radius:
                     continue
@@ -404,12 +407,98 @@ class DiscoveryService:
                 )
             except (KeyError, TypeError, ValueError, AttributeError):
                 skipped += 1
-        places.sort(key=lambda place: (place.distance_m or 0, place.id))
+        total_place_count = len(places)
+        nearby_groups = {category: [] for category in categories}
+        for place in places:
+            nearby_groups[place.category].append(place)
+        for values in nearby_groups.values():
+            values.sort(
+                key=lambda place: (
+                    place.distance_m if place.distance_m is not None else 10**9,
+                    place.id,
+                )
+            )
+        places = []
+        while any(nearby_groups.values()) and len(places) < 40:
+            for category in categories:
+                if nearby_groups[category] and len(places) < 40:
+                    places.append(nearby_groups[category].pop(0))
+
+        if places:
+            page_ids = "|".join(str(candidates[place.id.split(":", 1)[1]][0]) for place in places)
+            try:
+                details = await self.gateway.request(
+                    "wikipedia_details",
+                    {
+                        "action": "query",
+                        "pageids": page_ids,
+                        "prop": "extracts|pageimages|info|pageviews",
+                        "inprop": "url",
+                        "exintro": 1,
+                        "explaintext": 1,
+                        "exsentences": 2,
+                        "exlimit": "max",
+                        "piprop": "thumbnail",
+                        "pithumbsize": 480,
+                        "pilimit": "max",
+                        "pvipdays": 30,
+                        "format": "json",
+                        "formatversion": 2,
+                    },
+                    ttl=21600,
+                )
+                by_page_id = {
+                    candidates[place.id.split(":", 1)[1]][0]: place for place in places
+                }
+                detail_pages = details.data.get("query", {}).get("pages", [])
+                if not isinstance(detail_pages, list):
+                    raise ValueError("invalid Wikipedia details")
+                for page in detail_pages:
+                    place = by_page_id.get(page.get("pageid"))
+                    if place is None:
+                        continue
+                    extract = page.get("extract")
+                    full_url = page.get("fullurl")
+                    thumbnail = page.get("thumbnail", {}).get("source")
+                    pageviews = page.get("pageviews", {})
+                    if isinstance(extract, str) and extract.strip():
+                        place.description = extract.strip()[:600]
+                    if isinstance(full_url, str) and full_url.startswith("https://"):
+                        place.source_url = full_url[:1000]
+                    if isinstance(thumbnail, str) and thumbnail.startswith("https://"):
+                        place.image_url = thumbnail[:1000]
+                    if isinstance(pageviews, dict):
+                        place.pageviews_30d = sum(
+                            value
+                            for value in pageviews.values()
+                            if type(value) is int and value >= 0
+                        )
+            except (ProviderError, KeyError, TypeError, ValueError, AttributeError):
+                # Descriptions and interest counts enrich results, but their absence must not
+                # turn verified coordinates and categories into an outage.
+                pass
+
+        grouped = {category: [] for category in categories}
+        for place in places:
+            grouped[place.category].append(place)
+        for values in grouped.values():
+            values.sort(
+                key=lambda place: (
+                    -(place.pageviews_30d if place.pageviews_30d is not None else -1),
+                    place.distance_m if place.distance_m is not None else 10**9,
+                    place.id,
+                )
+            )
+        places = []
+        while any(grouped.values()):
+            for category in categories:
+                if grouped[category]:
+                    places.append(grouped[category].pop(0))
         return PlacesResponse(
             destination_id=destination.id,
             places=places[:40],
             radius_m=radius,
-            truncated=len(pages) >= 250 or len(places) > 40,
+            truncated=len(pages) >= 250 or total_place_count > 40,
             skipped_records=skipped,
             metadata=self.metadata(
                 mode,

@@ -104,12 +104,19 @@ class ToolRegistry:
                     self.weather = result
                     status, cached = ("partial" if result.status != "ok" else "success"), False
             elif name == "search_places":
-                args = PlacesArgs.model_validate(arguments)
-                if args.destination_id != self.body.destination_id:
+                if not isinstance(arguments, dict) or (
+                    arguments.get("destination_id") != self.body.destination_id
+                ):
                     raise ToolError("place_arguments_out_of_scope")
-                requested = sorted(set(args.categories))
-                if not set(requested).issubset(set(self.categories)):
-                    raise ToolError("place_categories_out_of_scope")
+                # The model chooses to call the tool; the server owns its exact scope.
+                # This prevents omitted food categories, unsupported categories and
+                # radius drift from weakening the user's validated request.
+                args = PlacesArgs(
+                    destination_id=self.body.destination_id,
+                    categories=self.categories,
+                    radius_m=1500,
+                )
+                requested = args.categories
                 key = f"places:{args.model_dump_json()}"
                 if key in self.cache:
                     result = self.cache[key]
@@ -197,6 +204,9 @@ def score(place: Place, interests: list[str], rainy: bool) -> float:
     values.append((20, 1.0 if place.classification_basis in {"osm_tag", "synthetic"} else 0.65))
     if place.distance_m is not None:
         values.append((20, max(0.0, 1 - place.distance_m / 3000)))
+    if place.pageviews_30d is not None:
+        # Wikipedia readership is an interest signal, not a quality score or review rating.
+        values.append((15, min(1.0, place.pageviews_30d / 50_000)))
     if rainy:
         indoor_value = (
             1.0 if place.indoor == "indoor" else (0.5 if place.indoor == "unknown" else 0)
@@ -213,6 +223,13 @@ def deterministic_proposal(body: GenerateTripRequest, evidence: EvidenceBundle) 
     unused = list(evidence.places)
     days = []
     per_day = {"relaxed": 1, "balanced": 2, "active": 3}[body.request.pace]
+    food_selected = "food" in body.request.interests
+    non_food_selected = any(interest != "food" for interest in body.request.interests)
+    if food_selected:
+        restaurant_count = sum(place.category == "restaurant" for place in unused)
+        visit_count = sum(place.category != "restaurant" for place in unused)
+        if restaurant_count < len(dates) or (non_food_selected and visit_count < len(dates)):
+            raise AIError("insufficient_food_evidence", 422)
     for trip_date in dates:
         ordered = sorted(
             unused,
@@ -221,7 +238,17 @@ def deterministic_proposal(body: GenerateTripRequest, evidence: EvidenceBundle) 
                 item.id,
             ),
         )
-        selected = ordered[: min(per_day, len(ordered) - max(0, len(dates) - len(days) - 1))]
+        if food_selected:
+            restaurant = next((item for item in ordered if item.category == "restaurant"), None)
+            visits = [item for item in ordered if item.category != "restaurant"]
+            visit_target = max(1, per_day - 1) if non_food_selected else 0
+            remaining_days = len(dates) - len(days)
+            available_now = max(0, len(visits) - (remaining_days - 1))
+            selected = visits[: min(visit_target, available_now)]
+            if restaurant is not None:
+                selected.append(restaurant)
+        else:
+            selected = ordered[: min(per_day, len(ordered) - max(0, len(dates) - len(days) - 1))]
         if not selected:
             raise AIError("insufficient_place_evidence", 422)
         for place in selected:
@@ -244,7 +271,7 @@ def deterministic_proposal(body: GenerateTripRequest, evidence: EvidenceBundle) 
                 date=trip_date,
                 activities=[
                     ProposedActivity(
-                        period=PERIODS[index],
+                        period=("evening" if place.category == "restaurant" else PERIODS[index]),
                         place_id=place.id,
                         reason=rainy_reason
                         if rain(weather[trip_date]) and place.indoor == "indoor"
@@ -276,6 +303,7 @@ def validate_proposal(proposal: PlanProposal, body: GenerateTripRequest, evidenc
     if [item.date for item in proposal.days] != expected:
         raise AIError("ai_invalid_itinerary_dates", 422)
     known = {place.id for place in evidence.places}
+    categories = {place.id: place.category for place in evidence.places}
     used = []
     for day in proposal.days:
         periods = [activity.period for activity in day.activities]
@@ -283,6 +311,14 @@ def validate_proposal(proposal: PlanProposal, body: GenerateTripRequest, evidenc
         if len(periods) != len(set(periods)) or not set(ids).issubset(known):
             raise AIError("ai_invalid_itinerary", 422)
         if set(day.alternative_place_ids) - known or set(day.alternative_place_ids) & set(ids):
+            raise AIError("ai_invalid_itinerary", 422)
+        if "food" in body.request.interests and sum(
+            categories.get(place_id) == "restaurant" for place_id in ids
+        ) != 1:
+            raise AIError("insufficient_food_evidence", 422)
+        if any(interest != "food" for interest in body.request.interests) and not any(
+            categories.get(place_id) != "restaurant" for place_id in ids
+        ):
             raise AIError("ai_invalid_itinerary", 422)
         used.extend(ids)
     if len(used) != len(set(used)):
@@ -328,6 +364,15 @@ class ItineraryService:
                     "Use every trip date exactly once in ascending order.",
                     "Do not repeat a place.",
                     "Return one to three activities per day with unique periods.",
+                    (
+                        "If food is selected, include exactly one restaurant every day, use "
+                        "the evening period for it, and include at least one non-restaurant "
+                        "visit every day when another interest is selected."
+                    ),
+                    (
+                        "Prefer higher pageviews_30d only within comparable categories; it "
+                        "measures Wikipedia interest, not quality or reviews."
+                    ),
                 ],
             },
             ensure_ascii=False,

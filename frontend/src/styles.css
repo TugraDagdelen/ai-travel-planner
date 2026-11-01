@@ -169,12 +169,17 @@ input[type="date"]::-webkit-calendar-picker-indicator { cursor: pointer; opacity
 .weather-day .weather-condition { font-size: 12px; color: #54744c; }
 .no-forecast { background: #eeefe8; border-style: dashed; }
 .place-results { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.place-result { border: 1px solid #dfe4d6; border-radius: 10px; padding: 18px; background: #fffefa; }
+.place-result { border: 1px solid #dfe4d6; border-radius: 10px; background: #fffefa; overflow: hidden; }
+.place-result-body { padding: 18px; }
+.place-image { display: block; width: 100%; height: 170px; object-fit: cover; background: #edf2e8; }
 .place-result-top { display: flex; justify-content: space-between; font-size: 10px; color: #6b7864; gap: 10px; }
 .place-category { color: #687d57; }
 .place-result h4 { font-size: 15px; line-height: 1.4; font-weight: 600; margin: 10px 0; overflow-wrap: anywhere; }
 .place-result p { font-size: 10px; line-height: 1.7; color: #697661; }
+.place-result .place-description { color: #3e4d43; font-size: 11px; min-height: 3.4em; }
+.place-result .place-interest { margin: 10px 0; color: #315f4d; }
 .place-result a { font-size: 10px; margin-top: 15px; color: #355d46; }
+.place-card-links { display: flex; flex-wrap: wrap; gap: 4px 14px; }
 .place-result .place-caveat { color: #8a6a40; margin-top: 6px; }
 .empty-data, .data-loading { font-size: 12px; padding: 18px; border-radius: 8px; background: #eef0e6; color: #6b7864; margin-top: 15px; line-height: 1.7; }
 .data-error { background: #fbefe7; color: #8a5035; padding: 17px; border-radius: 9px; border: 1px solid #ebd3c3; font-size: 12px; line-height: 1.7; margin-top: 16px; }
@@ -203,11 +208,16 @@ input[type="date"]::-webkit-calendar-picker-indicator { cursor: pointer; opacity
 .day-heading h4 { margin: 2px 0 0; font-size: 14px; text-transform: capitalize; }
 .rain-chip { margin-left: auto; display: flex; align-items: center; gap: 5px; font-size: 10px; color: #55704c; }
 .itinerary-day ol { list-style: none; margin: 0; padding: 6px 0 0; }
+.day-activity-group { margin-top: 18px; }
+.day-activity-group > h4 { color: #264b3f; font-family: Georgia, serif; font-size: 18px; padding-bottom: 7px; border-bottom: 1px solid #dfe4d6; }
+.meal-group { background: #f7f0dc; border-radius: 9px; padding: 14px 16px 2px; }
 .itinerary-day li { display: grid; grid-template-columns: 90px 1fr; gap: 14px; padding: 14px 0; border-bottom: 1px dashed #e3e6da; }
 .itinerary-day li:last-child { border-bottom: 0; }
 .itinerary-day li > span { color: #728168; font-size: 10px; text-transform: uppercase; letter-spacing: .5px; }
 .itinerary-day li strong { font-size: 13px; }
 .itinerary-day li p { color: #6b7864; font-size: 11px; line-height: 1.6; margin-top: 5px; }
+.itinerary-day li .activity-description { color: #34483f; font-size: 12px; }
+.activity-interest { display: block; color: #657a5e; margin-top: 7px; font-size: 9px; }
 .alternatives { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 12px; background: #edf2e8; border-radius: 7px; font-size: 10px; }
 .alternatives strong { color: #55704c; }
 .alternatives span { padding: 5px 8px; background: #fffefa; border-radius: 5px; }

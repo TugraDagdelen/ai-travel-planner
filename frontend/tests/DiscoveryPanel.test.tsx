@@ -28,7 +28,7 @@ const weather: WeatherResponse = {
 beforeEach(() => {
   vi.mocked(searchDestinations).mockReset().mockResolvedValue(cities)
   vi.mocked(fetchWeather).mockReset().mockResolvedValue(weather)
-  vi.mocked(fetchPlaces).mockReset().mockResolvedValue({ destination_id: 'geonames:1', radius_m: 1500, result_limit: 40, truncated: false, skipped_records: 0, metadata: { ...metadata, source: '© OpenStreetMap contributors', source_url: 'https://www.openstreetmap.org/copyright' }, places: [{ id: 'fixture:1', name: 'Fixture Museum', category: 'museum', latitude: null, longitude: null, coordinate_kind: 'unknown', distance_m: null, indoor: 'indoor', classification_basis: 'category_inference', source_url: null }] })
+  vi.mocked(fetchPlaces).mockReset().mockResolvedValue({ destination_id: 'geonames:1', radius_m: 1500, result_limit: 40, truncated: false, skipped_records: 0, metadata: { ...metadata, source: 'Wikidata and Wikipedia contributors', source_url: 'https://www.wikidata.org/wiki/Wikidata:Licensing' }, places: [{ id: 'fixture:1', name: 'Fixture Museum', category: 'museum', latitude: null, longitude: null, coordinate_kind: 'unknown', distance_m: null, indoor: 'indoor', classification_basis: 'category_inference', source_url: 'https://en.wikipedia.org/wiki/Fixture_Museum', description: 'A detailed description from Wikipedia.', image_url: 'https://upload.wikimedia.org/fixture.jpg', pageviews_30d: 1234 }] })
 })
 
 async function chooseCity() {
@@ -53,6 +53,9 @@ describe('real data discovery', () => {
     expect(screen.getByText('No forecast is available for this date.')).toBeInTheDocument()
     expect(screen.getByText('No verifiable coordinates')).toBeInTheDocument()
     expect(screen.getByText(/Inferred from category/)).toBeInTheDocument()
+    expect(screen.getByText('A detailed description from Wikipedia.')).toBeInTheDocument()
+    expect(screen.getByText(/1,234/)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Open detailed source page/ })).toHaveAttribute('href', 'https://en.wikipedia.org/wiki/Fixture_Museum')
   })
 
   it('keeps place results when the weather service fails', async () => {

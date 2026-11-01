@@ -54,6 +54,9 @@ export interface Place {
   indoor: 'indoor' | 'outdoor' | 'unknown'
   classification_basis: 'osm_tag' | 'category_inference' | 'unknown' | 'synthetic'
   source_url: string | null
+  description?: string | null
+  image_url?: string | null
+  pageviews_30d?: number | null
 }
 
 export interface PlacesResponse {

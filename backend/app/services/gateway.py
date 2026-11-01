@@ -15,6 +15,7 @@ ENDPOINTS = {
     "geocoding": "https://geocoding-api.open-meteo.com/v1/search",
     "forecast": "https://api.open-meteo.com/v1/forecast",
     "wikipedia_geo": "https://en.wikipedia.org/w/api.php",
+    "wikipedia_details": "https://en.wikipedia.org/w/api.php",
     "wikidata_types": "https://query.wikidata.org/sparql",
     # One bounded fallback is allowed for availability, never to evade a 429 or cooldown.
     "overpass": (
@@ -56,7 +57,11 @@ class Gateway:
         provider = (
             "overpass"
             if endpoint == "overpass"
-            else ("wikimedia" if endpoint in {"wikipedia_geo", "wikidata_types"} else "meteo")
+            else (
+                "wikimedia"
+                if endpoint in {"wikipedia_geo", "wikipedia_details", "wikidata_types"}
+                else "meteo"
+            )
         )
         key = endpoint + json.dumps(parameters, sort_keys=True)
         try:

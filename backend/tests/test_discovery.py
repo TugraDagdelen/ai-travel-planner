@@ -218,17 +218,44 @@ def test_wikimedia_places_are_real_typed_and_attributed():
         if request.url.host == "geocoding-api.open-meteo.com":
             return httpx.Response(200, json=fixture("cities.json"))
         if request.url.host == "en.wikipedia.org":
+            if request.url.params.get("pageids"):
+                return httpx.Response(
+                    200,
+                    json={
+                        "query": {
+                            "pages": [
+                                {
+                                    "pageid": 10,
+                                    "title": "Fixture Museum",
+                                    "fullurl": "https://en.wikipedia.org/wiki/Fixture_Museum",
+                                    "extract": "A detailed museum description from Wikipedia.",
+                                    "thumbnail": {"source": "https://upload.wikimedia.org/museum.jpg"},
+                                    "pageviews": {"2027-01-01": 120, "2027-01-02": 80},
+                                },
+                                {
+                                    "pageid": 20,
+                                    "title": "Fixture Restaurant",
+                                    "fullurl": "https://en.wikipedia.org/wiki/Fixture_Restaurant",
+                                    "extract": "A notable restaurant description.",
+                                    "pageviews": {"2027-01-01": 50},
+                                },
+                            ]
+                        }
+                    },
+                )
             return httpx.Response(
                 200,
                 json={
                     "query": {
                         "pages": [
                             {
+                                "pageid": 10,
                                 "title": "Fixture Museum",
                                 "pageprops": {"wikibase_item": "Q100"},
                                 "coordinates": [{"lat": 48.851, "lon": 2.35}],
                             },
                             {
+                                "pageid": 20,
                                 "title": "Fixture Restaurant",
                                 "pageprops": {"wikibase_item": "Q200"},
                                 "coordinates": [{"lat": 48.852, "lon": 2.351}],
@@ -280,12 +307,16 @@ def test_wikimedia_places_are_real_typed_and_attributed():
     }
     assert payload["metadata"]["source"] == "Wikidata and Wikipedia contributors"
     museum = next(place for place in payload["places"] if place["id"] == "wikidata:Q100")
-    assert museum["source_url"] == "https://www.wikidata.org/wiki/Q100"
+    assert museum["source_url"] == "https://en.wikipedia.org/wiki/Fixture_Museum"
+    assert museum["description"] == "A detailed museum description from Wikipedia."
+    assert museum["image_url"] == "https://upload.wikimedia.org/museum.jpg"
+    assert museum["pageviews_30d"] == 200
     assert calls[1].url.params["colimit"] == "max"
     assert [request.url.host for request in calls] == [
         "geocoding-api.open-meteo.com",
         "en.wikipedia.org",
         "query.wikidata.org",
+        "en.wikipedia.org",
     ]
 
 

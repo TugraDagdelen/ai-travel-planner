@@ -57,6 +57,14 @@ def test_demo_generation_is_valid_persisted_and_source_labelled(client):
     assert [day["date"] for day in trip["days"]] == ["2027-02-01", "2027-02-02"]
     place_ids = [item["place"]["id"] for day in trip["days"] for item in day["activities"]]
     assert len(place_ids) == len(set(place_ids))
+    assert all(
+        sum(item["place"]["category"] == "restaurant" for item in day["activities"]) == 1
+        for day in trip["days"]
+    )
+    assert all(
+        any(item["place"]["category"] != "restaurant" for item in day["activities"])
+        for day in trip["days"]
+    )
     assert all(source["mode"] == "demo" for source in trip["sources"])
     assert {item["name"] for item in trip["agent_activity"]} >= {
         "get_weather",
@@ -72,14 +80,20 @@ def test_demo_generation_is_valid_persisted_and_source_labelled(client):
 
 def test_revision_reuses_saved_evidence_and_crud_is_transactional(client):
     trip = client.post("/api/trips/generate", json=generation_body(client)).json()
-    original = [day["activities"][0]["place"]["id"] for day in trip["days"]]
+    original = [
+        item["place"]["id"] for day in trip["days"] for item in day["activities"]
+    ]
     revised = client.post(
         f"/api/trips/{trip['id']}/revise", json={"instruction": "Swap the first two stops"}
     )
     assert revised.status_code == 200
     body = revised.json()
     assert body["version"] == 2
-    assert [day["activities"][0]["place"]["id"] for day in body["days"]] == original[::-1]
+    revised_ids = [
+        item["place"]["id"] for day in body["days"] for item in day["activities"]
+    ]
+    assert revised_ids[:2] == original[:2][::-1]
+    assert revised_ids[2:] == original[2:]
     assert body["agent_activity"][-1]["name"] == "saved_evidence"
     renamed = client.patch(f"/api/trips/{trip['id']}", json={"title": "Paris weekend"})
     assert renamed.json()["title"] == "Paris weekend"
@@ -128,7 +142,7 @@ def test_invalid_modes_ai_readiness_and_insufficient_evidence_fail_closed(client
     long_trip = generation_body(client, days=4)
     result = client.post("/api/trips/generate", json=long_trip)
     assert result.status_code == 422
-    assert result.json()["code"] == "insufficient_place_evidence"
+    assert result.json()["code"] == "insufficient_food_evidence"
 
 
 def test_unknown_trip_and_revision_input_are_safe(client):
