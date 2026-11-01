@@ -9,7 +9,7 @@ This script is reproducible without API keys or external providers.
 5. **Generation (75 seconds).** Generate the demo itinerary. Show the daily explanations, interactive list/marker selection, activity record and local-save badge. Explain idempotency and backend validation.
 6. **Persistence and revision (60 seconds).** Open the saved trip, request `2. günü değiştir`, and show version 2 plus revision history. Confirm that day 1 stays unchanged.
 7. **CRUD and resilience (45 seconds).** Open My Trips, rename the title, then show the delete confirmation without completing it if the record should be kept. Explain that a tile failure leaves the itinerary usable.
-8. **Quality evidence (45 seconds).** Show `scripts/verify.ps1`, the offline GitHub Actions workflow, test counts and repository safety scan. State the live limitations: Gemini has no configured eligible key here, and Overpass was not reachable during the recorded live check.
+8. **Quality evidence (45 seconds).** Show `scripts/verify.ps1`, the GitHub Actions workflow, test counts and repository safety scan. Show the recorded live Paris check: Open-Meteo weather, Wikimedia/Wikidata places and Gemini tool calling all completed in Docker.
 
 ## Suggested closing
 

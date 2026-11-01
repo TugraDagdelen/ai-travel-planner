@@ -36,7 +36,12 @@ def create_app(
         async with httpx.AsyncClient(
             timeout=httpx.Timeout(20, connect=5),
             follow_redirects=False,
-            headers={"User-Agent": "Rota-Educational-Local/0.6", "Accept": "application/json"},
+            headers={
+                "User-Agent": (
+                    "Rota/0.6 (https://github.com/TugraDagdelen/ai-travel-planner)"
+                ),
+                "Accept": "application/json",
+            },
             transport=transport,
         ) as client:
             application.state.discovery = DiscoveryService(Gateway(client, settings), now=now)

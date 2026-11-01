@@ -5,10 +5,10 @@ Session: 2026-10-29–2026-11-01, Windows. Node 24.12.0 / npm 11.6.2 / Python 3.
 | Check | Result |
 |---|---|
 | Repository `python scripts/check_repository.py` | Passed; no local DB/environment files or recognizable credentials tracked |
-| Backend `python -m pytest -q -p no:cacheprovider` | **83 passed** |
+| Backend `python -m pytest -q -p no:cacheprovider` | **85 passed** |
 | Backend `python -m ruff check app tests` | Passed |
 | Backend `python -m pip check` | No broken requirements |
-| Frontend `npm test` | **25 passed**, 8 files |
+| Frontend `npm test` | **27 passed**, 8 files |
 | Frontend `npm run typecheck` | Passed |
 | Frontend `npm run lint` | Passed |
 | Frontend `npm run build` | TypeScript and production build passed |
@@ -17,7 +17,9 @@ Session: 2026-10-29–2026-11-01, Windows. Node 24.12.0 / npm 11.6.2 / Python 3.
 | Live Open-Meteo geocoding | İstanbul: 3 candidates; Barcelona: 10; Paris: 10; nonexistent name: 0 |
 | Live Open-Meteo forecast | Three days, status ok, Europe/Istanbul time zone |
 | Live Overpass | 2026-11-01 small query: main endpoint returned 502; documented fallback timed out. **Live result unverified** |
+| Live Wikimedia/Wikidata places | **Passed 2026-11-01:** Paris returned 18 requested-category, coordinate-backed real places in about four seconds |
 | Gemini SDK live request | **Passed 2026-11-01:** operator-confirmed Free Tier key returned `connected` with `gemini-3.5-flash-lite`; key remained local and ignored |
+| Complete live AI itinerary | **Passed in Docker:** two-day Paris plan used Open-Meteo plus Wikimedia/Wikidata evidence and Gemini tool calling; saved with six non-repeated real places in 7.4 seconds |
 | Browser AI status | Missing-key state shown from real FastAPI response; Turkish/English copy verified |
 | Browser Phase 5 flow | Two-day Paris demo generated, saved, day 2 revised to version 2, reopened by ID and listed in My Trips |
 | Responsive QA | Desktop and 390 × 844 saved-trip views inspected; no horizontal overflow and no console warnings/errors |
@@ -34,7 +36,7 @@ Frontend tests retain form/navigation/discovery/AI-status coverage and add a com
 
 ## Limits
 
-Live checks were separate manual development probes, not CI tests. Open-Meteo success does not guarantee future availability; both tested Overpass endpoints failing in this environment is not proof of a provider-wide outage. The Gemini structured connection request succeeded locally and inside Docker; the full live tool-calling itinerary was not claimed by that connection-only check. The explicit offline demo and fake-model agent contract were exercised. Maps/Search grounding remains disabled.
+Live checks were separate manual development probes, not CI tests. Provider success does not guarantee future availability. Wikimedia/Wikidata is the verified primary place path; Overpass remains a bounded fallback and its public instances were not reachable during this session. The Gemini connection and full live tool-calling itinerary both succeeded inside Docker. The explicit offline demo and fake-model agent contract remain covered. Maps/Search grounding remains disabled.
 
 The Python stack emits a Starlette TestClient deprecation warning about HTTPX; tests pass, and runtime HTTPX remains the selected integration client. Optional pytest caching was disabled because of sandbox file permissions. Vite uses native config loading and Vitest threads for this Windows environment.
 

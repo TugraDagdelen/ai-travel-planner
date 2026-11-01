@@ -25,7 +25,7 @@ Demo cities: İstanbul, Barcelona, Paris (France), Paris (Texas). City positions
 4. Try Paris with country code FR, then a nonexistent city to see the empty state.
 5. If a provider fails or limits requests, keep the error visible and honor the wait before retrying. Demo requires an explicit mode change.
 
-Open-Meteo live checks passed. Overpass was not reachable reliably in this environment; its panel may report an error until the configured instance is reachable. No automatic instance rotation is implemented.
+Open-Meteo and Wikimedia/Wikidata live checks passed. Paris returned 18 typed, coordinate-backed places in about four seconds. Overpass remains a bounded fallback if Wikimedia is temporarily unavailable.
 
 Choose the deterministic planner after live discovery to generate without Gemini. It uses the same tool results and documented scoring rules; it does not silently switch to demo when a provider fails. Personal notes stay with the local backend in deterministic mode.
 
@@ -38,4 +38,4 @@ Choose the deterministic planner after live discovery to generate without Gemini
 5. Revise the plan in natural language. The revision reuses stored evidence and rejects new tool calls.
 6. Quota, invalid-key, model-access, invalid tool/output and timeout messages remain errors; there is no paid, model or demo retry.
 
-This development session verified the missing-key flow in Turkish and English. A live Gemini response was not demonstrated because no eligible key/account was configured. Google Maps/Search research is disabled and must return an unavailable result with OSM fallback.
+This development session verified a complete two-day Paris itinerary with live Open-Meteo weather, Wikimedia/Wikidata places and Gemini tool calling. Google Maps/Search research remains disabled because it is outside the reviewed API Free tier.

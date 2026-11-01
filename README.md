@@ -4,9 +4,9 @@ A travel planner built with React, TypeScript, Tailwind CSS and FastAPI, with a 
 
 **Status: Phase 6 complete (v0.6.0).** This portfolio-ready local release completes the product flow, offline test suite, repository safety check, reproducible setup documentation, architecture narrative and demonstration assets. Users can generate and save a validated itinerary, inspect its Leaflet route and daily weather, reopen it from My Trips, rename it, revise a specific day from stored evidence, and delete it.
 
-Gemini 3.5 Flash-Lite is the only reviewed model allowed by this release. The bounded SDK connection check was verified locally on 2026-11-01 with an operator-confirmed Free Tier project; no key is stored in the repository. The complete live tool-calling itinerary loop still depends on provider availability. Google Maps and Search grounding remain disabled: the reviewed pricing page does not offer them on this model's API Free tier. See [Gemini setup](docs/gemini-setup.md).
+Gemini 3.5 Flash-Lite is the only reviewed model allowed by this release. The bounded SDK connection and complete live tool-calling itinerary were verified locally in Docker on 2026-11-01 with an operator-confirmed Free Tier project; no key is stored in the repository. Google Maps and Search grounding remain disabled: the reviewed pricing page does not offer them on this model's API Free tier. See [Gemini setup](docs/gemini-setup.md).
 
-Open-Meteo city lookup and weather succeeded in live checks. The selected Overpass instance timed out and subsequently could not be reached from this environment, so live OSM retrieval remains unverified. Parsing and failure behavior passed offline tests. See [test evidence](docs/testing.md).
+Open-Meteo city/weather and Wikimedia/Wikidata place discovery succeeded in live checks. Paris returned 18 typed, coordinate-backed places in about four seconds. Public Overpass remains a bounded real-data fallback. See [test evidence](docs/testing.md).
 
 [Türkçe kurulum ve kullanım](README.tr.md) · [Development progress](docs/development-progress.md) · [Teacher demonstration](docs/teacher-demo.md) · [Free-service checklist](docs/free-services.md)
 
@@ -29,7 +29,7 @@ Rota demonstrates how to build a transparent full-stack AI product without hidin
 - Backend-validated preference summary; data stays in React memory while navigating and resets on refresh.
 - Explicit city selection, optional country filtering and ambiguous-city handling.
 - Date-aligned weather, local time zones, missing values and forecast-window handling.
-- Bounded nearby place queries with OSM record links, attribution and coordinate/classification quality.
+- Bounded nearby place queries from Wikimedia/Wikidata with source links, attribution and coordinate/classification quality; Overpass remains a fallback.
 - Independent loading/error/retry states, cached response labels, request limits and an explicit offline demo.
 - Opt-in Gemini status and connection checks with no automatic model, paid-tier or grounding fallback.
 - Bounded manual Gemini function-calling loop with an allowlisted weather/place tool registry.
@@ -186,7 +186,7 @@ See [testing notes](docs/testing.md) for actual executed checks and browser veri
 flowchart LR
     React[React + TypeScript + Tailwind] -->|Preferences, discovery, itinerary| API[FastAPI + Pydantic]
     API --> Agent[Bounded tool registry and validators]
-    Agent --> Data[Open-Meteo + OSM / Overpass]
+    Agent --> Data[Open-Meteo + Wikimedia / Wikidata]
     Agent -->|optional manual function loop| AI[Gemini 3.5 Flash-Lite]
     API --> DB[(SQLite via SQLAlchemy)]
 ```
@@ -214,7 +214,7 @@ sequenceDiagram
 
 The model never calls providers directly. The backend accepts only declared tool names and validated arguments, enforces step/tool/time budgets, materializes provider-owned place data, and rejects invalid final JSON. Deterministic and demo generation use the same validators without making a model request.
 
-The Gemini connection path is live-verified with an eligible local Free Tier key, and the agent path is covered with an offline fake-model contract. A complete live tool-calling itinerary remains provider-dependent and was not claimed by the connection-only check. Overpass live availability is subject to the limitation above. Phase 5's Leaflet and saved-trip product flow are complete. Google Maps/Search grounding is disabled for the reviewed model/account path.
+The Gemini connection and complete two-turn tool-calling path are live-verified with an eligible local Free Tier key and remain covered by an offline fake-model contract. Function calling and the structured final response run as separate model turns for compatibility. Google Maps/Search grounding is disabled for the reviewed model/account path.
 
 ## Limits and privacy
 
@@ -226,7 +226,7 @@ Do not expose the development servers publicly. No billing is configured, no pai
 
 ## Attribution and data use
 
-Live city and weather data come from Open-Meteo under its published terms. Place records and map tiles are attributed to © OpenStreetMap contributors; individual OSM record links are retained when supplied. Google Maps URLs are ordinary keyless navigation links, not Places or grounding API calls. Provider responses may be incomplete and remain subject to provider quotas, retention terms and licenses. The repository contains synthetic fixtures and screenshots of synthetic demo data, not stored personal information or restricted live payloads.
+Live city and weather data come from Open-Meteo under its published terms. Place discovery uses coordinate-backed Wikipedia pages classified through Wikidata, with record links and contributor attribution; the data is available under the sources' respective licenses. Overpass is retained as a bounded fallback. Map tiles remain attributed to © OpenStreetMap contributors. Google Maps URLs are ordinary keyless navigation links, not Places or grounding API calls. Provider responses may be incomplete and remain subject to provider quotas, retention terms and licenses.
 
 ## Reproducible verification
 

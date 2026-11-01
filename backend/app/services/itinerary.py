@@ -342,8 +342,13 @@ class ItineraryService:
         try:
             async with asyncio.timeout(self.settings.agent_timeout_seconds):
                 for _step in range(self.settings.agent_max_steps):
+                    declarations = (
+                        []
+                        if registry.weather is not None and registry.places is not None
+                        else TOOL_DECLARATIONS
+                    )
                     content, calls, text = await self.gemini.agent_turn(
-                        history, TOOL_DECLARATIONS, PlanProposal.model_json_schema(), system
+                        history, declarations, PlanProposal.model_json_schema(), system
                     )
                     history.append(content)
                     if calls:

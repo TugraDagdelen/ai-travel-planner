@@ -142,10 +142,10 @@ def test_unknown_trip_and_revision_input_are_safe(client):
 class FakeGemini:
     def __init__(self):
         self.turns = 0
-        self.declaration_names = []
+        self.declaration_history = []
 
     async def agent_turn(self, _history, declarations, _schema, _system):
-        self.declaration_names = [item.name for item in declarations]
+        self.declaration_history.append([item.name for item in declarations])
         self.turns += 1
         if self.turns == 1:
             content = types.Content(
@@ -233,6 +233,7 @@ def test_ai_loop_dispatches_declared_tools_and_validates_actual_results():
         database_url="sqlite+pysqlite:///:memory:",
         meteo_min_interval_seconds=0,
         overpass_min_interval_seconds=0,
+        places_provider="overpass",
     )
     fake = FakeGemini()
     with TestClient(
@@ -261,7 +262,7 @@ def test_ai_loop_dispatches_declared_tools_and_validates_actual_results():
         result = live.post("/api/trips/generate", json=body)
     assert result.status_code == 201
     assert fake.turns == 2
-    assert fake.declaration_names == ["get_weather", "search_places"]
+    assert fake.declaration_history == [["get_weather", "search_places"], []]
     assert provider_calls == [
         "geocoding-api.open-meteo.com",
         "api.open-meteo.com",

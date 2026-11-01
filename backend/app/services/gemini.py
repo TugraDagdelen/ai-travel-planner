@@ -251,20 +251,29 @@ class GeminiService:
                 raise AIError("ai_local_limit", 429, math.ceil(minute[0] + 60 - now))
             self.calls.append(now)
             try:
+                config: dict = {
+                    "system_instruction": system_instruction,
+                    "max_output_tokens": 4096,
+                }
+                if declarations:
+                    # Function calling and structured final output are separate turns.
+                    # Combining both is rejected by some Gemini GenerateContent models.
+                    config.update(
+                        tools=[types.Tool(function_declarations=declarations)],
+                        automatic_function_calling=types.AutomaticFunctionCallingConfig(
+                            disable=True
+                        ),
+                    )
+                else:
+                    config.update(
+                        response_mime_type="application/json",
+                        response_json_schema=response_schema,
+                    )
                 async with asyncio.timeout(self.settings.gemini_timeout_seconds):
                     response = await self._client().aio.models.generate_content(
                         model=self.settings.gemini_model,
                         contents=contents,
-                        config=types.GenerateContentConfig(
-                            system_instruction=system_instruction,
-                            tools=[types.Tool(function_declarations=declarations)],
-                            automatic_function_calling=types.AutomaticFunctionCallingConfig(
-                                disable=True
-                            ),
-                            response_mime_type="application/json",
-                            response_json_schema=response_schema,
-                            max_output_tokens=4096,
-                        ),
+                        config=types.GenerateContentConfig(**config),
                     )
                 if response.prompt_feedback and response.prompt_feedback.block_reason:
                     raise AIError("ai_blocked", 422)

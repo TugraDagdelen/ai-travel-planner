@@ -62,7 +62,10 @@ def harness():
         return httpx.Response(200, json=copy.deepcopy(value))
 
     settings = Settings(
-        _env_file=None, meteo_min_interval_seconds=0, overpass_min_interval_seconds=0
+        _env_file=None,
+        meteo_min_interval_seconds=0,
+        overpass_min_interval_seconds=0,
+        places_provider="overpass",
     )
     with TestClient(
         create_app(settings, transport=httpx.MockTransport(handler), now=lambda: NOW)
@@ -205,6 +208,85 @@ def test_dense_categories_use_bounded_overpass_filters(harness):
     assert '["historic"]' not in query
     assert 'monument|memorial|castle' in query
     assert "maxsize:4194304" in query
+
+
+def test_wikimedia_places_are_real_typed_and_attributed():
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        if request.url.host == "geocoding-api.open-meteo.com":
+            return httpx.Response(200, json=fixture("cities.json"))
+        if request.url.host == "en.wikipedia.org":
+            return httpx.Response(
+                200,
+                json={
+                    "query": {
+                        "pages": [
+                            {
+                                "title": "Fixture Museum",
+                                "pageprops": {"wikibase_item": "Q100"},
+                                "coordinates": [{"lat": 48.851, "lon": 2.35}],
+                            },
+                            {
+                                "title": "Fixture Restaurant",
+                                "pageprops": {"wikibase_item": "Q200"},
+                                "coordinates": [{"lat": 48.852, "lon": 2.351}],
+                            },
+                        ]
+                    }
+                },
+            )
+        if request.url.host == "query.wikidata.org":
+            return httpx.Response(
+                200,
+                json={
+                    "results": {
+                        "bindings": [
+                            {
+                                "item": {"value": "http://www.wikidata.org/entity/Q100"},
+                                "root": {"value": "http://www.wikidata.org/entity/Q33506"},
+                            },
+                            {
+                                "item": {"value": "http://www.wikidata.org/entity/Q200"},
+                                "root": {"value": "http://www.wikidata.org/entity/Q11707"},
+                            },
+                        ]
+                    }
+                },
+            )
+        raise AssertionError(f"unexpected provider: {request.url.host}")
+
+    settings = Settings(
+        _env_file=None,
+        places_provider="wikimedia",
+        meteo_min_interval_seconds=0,
+        wikimedia_min_interval_seconds=0,
+    )
+    with TestClient(create_app(settings, transport=httpx.MockTransport(handler))) as client:
+        identifier = select(client)
+        result = client.get(
+            "/api/places",
+            params={
+                "destination_id": identifier,
+                "categories": ["museum", "restaurant"],
+            },
+        )
+    assert result.status_code == 200
+    payload = result.json()
+    assert {place["id"] for place in payload["places"]} == {
+        "wikidata:Q100",
+        "wikidata:Q200",
+    }
+    assert payload["metadata"]["source"] == "Wikidata and Wikipedia contributors"
+    museum = next(place for place in payload["places"] if place["id"] == "wikidata:Q100")
+    assert museum["source_url"] == "https://www.wikidata.org/wiki/Q100"
+    assert calls[1].url.params["colimit"] == "max"
+    assert [request.url.host for request in calls] == [
+        "geocoding-api.open-meteo.com",
+        "en.wikipedia.org",
+        "query.wikidata.org",
+    ]
 
 
 def test_empty_and_truncated_places_are_explicit(harness):

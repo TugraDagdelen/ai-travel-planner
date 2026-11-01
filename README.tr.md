@@ -4,9 +4,9 @@ React + TypeScript + Tailwind arayüzü ve FastAPI backend'i ile geliştirilen s
 
 **Aşama 6 tamamlandı (v0.6.0).** Yerel ürün akışı, çevrimdışı testler, depo güvenlik taraması, temiz kurulum belgeleri, mimari anlatım ve sunum görselleri hazır. Doğrulanmış plan oluşturma/kaydetme, Leaflet rota haritası, günlük hava, kaynaklar, “Seyahatlerim”, başlık düzenleme, revizyon geçmişi ve silme akışları tamamlandı.
 
-Sınırlı Gemini SDK bağlantı kontrolü, kullanıcı tarafından Free Tier olduğu doğrulanan yerel bir projeyle 2026-11-01 tarihinde başarıyla çalıştı; anahtar depoda tutulmaz. Tam canlı araç çağırmalı seyahat üretimi yine sağlayıcıların erişilebilirliğine bağlıdır. Bu sürüm yalnızca ücretsiz katmanı bulunan `gemini-3.5-flash-lite` modeline izin verir. Google Maps/Search grounding, seçilen modelin API ücretsiz katmanında sunulmadığı için kapalıdır.
+Sınırlı Gemini SDK bağlantı kontrolü ve tam canlı araç çağırmalı seyahat üretimi, kullanıcı tarafından Free Tier olduğu doğrulanan yerel bir projeyle 2026-11-01 tarihinde Docker içinde başarıyla çalıştı; anahtar depoda tutulmaz. Bu sürüm yalnızca ücretsiz katmanı bulunan `gemini-3.5-flash-lite` modeline izin verir. Google Maps/Search grounding, seçilen modelin API ücretsiz katmanında sunulmadığı için kapalıdır.
 
-Open-Meteo şehir ve hava durumu bağlantısı canlı olarak doğrulandı. Overpass bu ortamda zaman aşımı/bağlantı hatası verdi; gerçek mekân verisinin canlı alımı henüz doğrulanamadı. Mekân ayrıştırma, hata durumları ve çevrimdışı demo testleri geçti.
+Open-Meteo şehir/hava durumu ve Wikimedia/Wikidata gerçek mekân bağlantıları canlı olarak doğrulandı. Paris için yaklaşık dört saniyede 18 koordinatlı ve kategorilendirilmiş gerçek mekân döndü. Overpass sınırlı bir gerçek veri yedeği olarak korunur.
 
 ## Amaç ve eğitim hedefleri
 

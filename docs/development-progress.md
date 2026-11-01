@@ -5,9 +5,9 @@ Updated: **2026-11-01**, version **0.6.0**.
 | Phase | Status | Evidence / remaining work |
 |---|---|---|
 | 1 — Foundation | Complete | Real React → FastAPI validation; responsive TR/EN UI; dependencies and setup docs |
-| 2 — Free data integrations | Implemented | City/weather/place APIs, provenance, caching, budgets, explicit demo and UI. Open-Meteo live verified; Overpass live unavailable here |
+| 2 — Free data integrations | Implemented, live verified | Open-Meteo city/weather and Wikimedia/Wikidata place APIs, provenance, caching, budgets, explicit demo and Overpass fallback |
 | 3 — Gemini and optional research | Implemented, connection live verified | Official SDK connection path returned `connected` locally and from Docker with an operator-confirmed Free Tier project; no key stored. Grounding remains disabled |
-| 4 — Agent and itineraries | Implemented, offline agent verified | Bounded function calling, validated itinerary, SQLite and evidence-reusing revisions; full live tool-calling itinerary remains provider-dependent |
+| 4 — Agent and itineraries | Implemented, live verified | Bounded function calling, validated itinerary, SQLite and evidence-reusing revisions; complete live Paris itinerary passed in Docker |
 | 5 — Complete product | Complete | Leaflet route, daily timeline/weather, citations, saved-trip CRUD UI and revision history |
 | 6 — Final portfolio QA | Complete | Offline end-to-end journey, real screenshots, repository scan, clean-source install and GitHub-ready docs |
 
@@ -20,7 +20,7 @@ Updated: **2026-11-01**, version **0.6.0**.
 - Added a CI repository-safety job, explicit TypeScript check and cache-free pytest execution.
 - Added purpose/learning objectives, function-calling sequence, attribution/data-use notes, roadmap, MIT license and teacher demonstration script.
 - Verified a clean source extraction and dependency installation separately from the development directories.
-- 83 backend and 25 frontend tests pass; repository scan, lint, dependency checks, typecheck and production build pass.
+- 85 backend and 27 frontend tests pass; repository scan, lint, dependency checks, typecheck and production build pass.
 
 ## Phase 5 delivery
 
@@ -59,7 +59,7 @@ Updated: **2026-11-01**, version **0.6.0**.
 
 - Explicit city selection with country/region/time-zone disambiguation.
 - Weather preserves requested dates, validates units and series, and marks missing/out-of-horizon values.
-- Bounded OSM queries with stable IDs, links, attribution and coordinate/classification evidence.
+- Bounded Wikimedia/Wikidata queries with stable IDs, links, attribution and coordinate/type evidence; bounded Overpass remains a fallback.
 - Memory cache, serialized requests, timeouts, limited retries and local call budgets.
 - Independent weather/place failures; city/mode changes cancel and ignore stale results.
 - Opt-in demo is clearly synthetic and isolated from live provider calls.
@@ -68,8 +68,8 @@ Updated: **2026-11-01**, version **0.6.0**.
 
 ## Remaining limits
 
-The earlier live Overpass query timed out and live place retrieval has not yet been demonstrated here. The app reports failure and offers an explicit demo choice. It now tries one documented public fallback after a transport or transient service failure, but never after rate limiting; this behavior is covered offline and still needs a live probe.
+Wikimedia/Wikidata live place retrieval is demonstrated with 18 Paris results in about four seconds. Public Overpass instances timed out in this environment, so they remain a secondary real-data fallback rather than the primary path.
 
-The Gemini connection path is live-verified with the user's eligible local key. The complete tool loop remains verified through an offline fake-model contract and real parser/provider fixtures; a connection check alone does not prove a full live itinerary. Draft forms, caches, limits and selected-city IDs reset with the corresponding process. Process-local limits are not provider billing controls. OpenStreetMap tiles and external source/navigation links still require internet; their failure does not remove the saved itinerary.
+The Gemini connection and complete tool loop are live-verified with the user's eligible local key: a two-day Paris plan used six real places and completed in 7.4 seconds. Offline fake-model and provider fixtures remain in the test suite. Draft forms, caches, limits and selected-city IDs reset with the corresponding process. Process-local limits are not provider billing controls. OpenStreetMap tiles and external source/navigation links still require internet; their failure does not remove the saved itinerary.
 
 The public GitHub repository and remote GitHub Actions run are complete. Docker production serving is verified locally with a named SQLite volume. No Render service was created, and Google grounding remains disabled. The Render Free Blueprint remains optional; hosted SQLite would be explicitly ephemeral. The original specification remains in `CODEX_MASTER_PROMPT.md`.

@@ -14,6 +14,8 @@ from app.core.config import Settings
 ENDPOINTS = {
     "geocoding": "https://geocoding-api.open-meteo.com/v1/search",
     "forecast": "https://api.open-meteo.com/v1/forecast",
+    "wikipedia_geo": "https://en.wikipedia.org/w/api.php",
+    "wikidata_types": "https://query.wikidata.org/sparql",
     # One bounded fallback is allowed for availability, never to evade a 429 or cooldown.
     "overpass": (
         "https://overpass-api.de/api/interpreter",
@@ -45,13 +47,17 @@ class Gateway:
         self.client = client
         self.settings = settings
         self.cache: OrderedDict[str, tuple[float, Payload]] = OrderedDict()
-        self.locks = {name: asyncio.Lock() for name in ("meteo", "overpass")}
+        self.locks = {name: asyncio.Lock() for name in ("meteo", "overpass", "wikimedia")}
         self.calls = {name: deque() for name in self.locks}
         self.next_call = {name: 0.0 for name in self.locks}
         self.cooldown = {name: 0.0 for name in self.locks}
 
     async def request(self, endpoint: str, parameters: dict, ttl: int) -> Payload:
-        provider = "overpass" if endpoint == "overpass" else "meteo"
+        provider = (
+            "overpass"
+            if endpoint == "overpass"
+            else ("wikimedia" if endpoint in {"wikipedia_geo", "wikidata_types"} else "meteo")
+        )
         key = endpoint + json.dumps(parameters, sort_keys=True)
         try:
             async with asyncio.timeout(self.settings.provider_timeout_seconds):
@@ -80,11 +86,11 @@ class Gateway:
             raise ProviderError("provider_timeout", provider) from exc
 
     async def _fetch(self, endpoint: str, provider: str, parameters: dict) -> Payload:
-        interval = (
-            self.settings.overpass_min_interval_seconds
-            if provider == "overpass"
-            else self.settings.meteo_min_interval_seconds
-        )
+        interval = {
+            "overpass": self.settings.overpass_min_interval_seconds,
+            "wikimedia": self.settings.wikimedia_min_interval_seconds,
+            "meteo": self.settings.meteo_min_interval_seconds,
+        }[provider]
         endpoint_urls = ENDPOINTS[endpoint]
         urls = endpoint_urls if isinstance(endpoint_urls, tuple) else (endpoint_urls,) * 2
         for attempt in range(2):
@@ -130,11 +136,11 @@ class Gateway:
                         raise ProviderError("provider_unavailable", provider)
                     return Payload(data, datetime.now(UTC))
             except httpx.TimeoutException as exc:
-                if endpoint == "overpass" and attempt == 0:
+                if provider in {"overpass", "wikimedia"} and attempt == 0:
                     continue
                 raise ProviderError("provider_timeout", provider) from exc
             except httpx.HTTPError as exc:
-                if endpoint == "overpass" and attempt == 0:
+                if provider in {"overpass", "wikimedia"} and attempt == 0:
                     continue
                 raise ProviderError("provider_unavailable", provider) from exc
             except (ValueError, UnicodeError) as exc:

@@ -34,6 +34,13 @@ CATEGORY_FILTERS = {
     # Restaurant areas/buildings are numerous and nodes provide enough candidates.
     "restaurant": ('node', '["amenity"="restaurant"]'),
 }
+WIKIDATA_ROOTS = {
+    "museum": "Q33506",
+    "historic": "Q839954",
+    "park": "Q22698",
+    "attraction": "Q570116",
+    "restaurant": "Q11707",
+}
 WEATHER_FIELDS = {
     "temperature_2m_min": ("temperature_min", -100, 70, "°C"),
     "temperature_2m_max": ("temperature_max", -100, 70, "°C"),
@@ -256,6 +263,17 @@ class DiscoveryService:
                 radius_m=radius,
                 metadata=self.metadata(mode, "", ""),
             )
+        if self.gateway.settings.places_provider == "wikimedia":
+            try:
+                return await self.wikimedia_places(destination, categories, radius, mode)
+            except ProviderError:
+                # Keep one independent real-data fallback. Demo data is never mixed in.
+                return await self.overpass_places(destination, categories, radius, mode)
+        return await self.overpass_places(destination, categories, radius, mode)
+
+    async def overpass_places(
+        self, destination: Destination, categories: list[Category], radius: int, mode: Mode
+    ):
         filters = "".join(
             f"{CATEGORY_FILTERS[category][0]}(around:{radius},{destination.latitude},"
             f'{destination.longitude}){CATEGORY_FILTERS[category][1]}["name"];'
@@ -278,6 +296,126 @@ class DiscoveryService:
                 "© OpenStreetMap contributors",
                 "https://www.openstreetmap.org/copyright",
                 payload,
+            ),
+        )
+
+    async def wikimedia_places(
+        self, destination: Destination, categories: list[Category], radius: int, mode: Mode
+    ):
+        geo = await self.gateway.request(
+            "wikipedia_geo",
+            {
+                "action": "query",
+                "generator": "geosearch",
+                "ggsprimary": "primary",
+                "ggsnamespace": 0,
+                "ggsradius": radius,
+                "ggscoord": f"{destination.latitude}|{destination.longitude}",
+                "ggslimit": 250,
+                "prop": "coordinates|pageprops",
+                "colimit": "max",
+                "format": "json",
+                "formatversion": 2,
+            },
+            ttl=86400,
+        )
+        pages = geo.data.get("query", {}).get("pages", [])
+        if not isinstance(pages, list):
+            raise ProviderError("provider_invalid_response", "wikimedia", False)
+        candidates: dict[str, tuple[str, float, float]] = {}
+        skipped = 0
+        for page in pages[:250]:
+            try:
+                qid = page["pageprops"]["wikibase_item"]
+                coordinates = page["coordinates"][0]
+                name = page["title"].strip()[:200]
+                lat, lon = float(coordinates["lat"]), float(coordinates["lon"])
+                if (
+                    not name
+                    or not isinstance(qid, str)
+                    or not qid.startswith("Q")
+                    or not qid[1:].isdigit()
+                    or not -90 <= lat <= 90
+                    or not -180 <= lon <= 180
+                ):
+                    raise ValueError("invalid Wikimedia place")
+                candidates[qid] = (name, lat, lon)
+            except (KeyError, IndexError, TypeError, ValueError, AttributeError):
+                skipped += 1
+        if not candidates:
+            return PlacesResponse(
+                destination_id=destination.id,
+                places=[],
+                radius_m=radius,
+                skipped_records=skipped,
+                metadata=self.metadata(
+                    mode,
+                    "Wikidata and Wikipedia contributors",
+                    "https://www.wikidata.org/wiki/Wikidata:Licensing",
+                    geo,
+                ),
+            )
+        roots = {WIKIDATA_ROOTS[category]: category for category in categories}
+        item_values = " ".join(f"wd:{qid}" for qid in candidates)
+        root_values = " ".join(f"wd:{qid}" for qid in roots)
+        query = (
+            "SELECT DISTINCT ?item ?root WHERE { "
+            f"VALUES ?item {{ {item_values} }} VALUES ?root {{ {root_values} }} "
+            "?item wdt:P31/wdt:P279* ?root. }"
+        )
+        typed = await self.gateway.request(
+            "wikidata_types", {"query": query, "format": "json"}, ttl=86400
+        )
+        bindings = typed.data.get("results", {}).get("bindings", [])
+        if not isinstance(bindings, list):
+            raise ProviderError("provider_invalid_response", "wikimedia", False)
+        places: list[Place] = []
+        identities: set[str] = set()
+        for binding in bindings:
+            try:
+                qid = binding["item"]["value"].rsplit("/", 1)[-1]
+                root = binding["root"]["value"].rsplit("/", 1)[-1]
+                if qid in identities or qid not in candidates or root not in roots:
+                    continue
+                name, lat, lon = candidates[qid]
+                meters = distance(destination.latitude, destination.longitude, lat, lon)
+                if meters > radius:
+                    continue
+                category = roots[root]
+                identities.add(qid)
+                places.append(
+                    Place(
+                        id=f"wikidata:{qid}",
+                        name=name,
+                        category=category,
+                        latitude=lat,
+                        longitude=lon,
+                        coordinate_kind="node",
+                        distance_m=meters,
+                        indoor=(
+                            "indoor"
+                            if category == "museum"
+                            else ("outdoor" if category == "park" else "unknown")
+                        ),
+                        classification_basis="category_inference",
+                        source_url=f"https://www.wikidata.org/wiki/{qid}",
+                        tags={"wikidata": qid},
+                    )
+                )
+            except (KeyError, TypeError, ValueError, AttributeError):
+                skipped += 1
+        places.sort(key=lambda place: (place.distance_m or 0, place.id))
+        return PlacesResponse(
+            destination_id=destination.id,
+            places=places[:40],
+            radius_m=radius,
+            truncated=len(pages) >= 250 or len(places) > 40,
+            skipped_records=skipped,
+            metadata=self.metadata(
+                mode,
+                "Wikidata and Wikipedia contributors",
+                "https://www.wikidata.org/wiki/Wikidata:Licensing",
+                typed,
             ),
         )
 

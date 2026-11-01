@@ -23,6 +23,6 @@ Only add `GEMINI_API_KEY` in Render's secret environment settings after checking
 
 Render's Free web service sleeps after 15 minutes without inbound traffic and can take about a minute to wake. Its filesystem is ephemeral, so SQLite trips can disappear after a restart, spin-down, or redeploy. The deployment is therefore a portfolio demonstration, not durable storage. Render Free Postgres currently expires after 30 days, so it is not configured as a false promise of permanent storage.
 
-The service also depends on shared Open-Meteo, Overpass, and OpenStreetMap tile infrastructure. Requests remain bounded and attributed. Overpass tries the main public endpoint and, only after a transport or transient service failure, one documented public fallback. It never rotates after a rate-limit response.
+The service also depends on shared Open-Meteo, Wikimedia/Wikidata, Overpass fallback, and OpenStreetMap tile infrastructure. Requests remain bounded, cached and attributed. Overpass remains a secondary real-data path and never rotates after a rate-limit response.
 
 Official references: [Render Free limits](https://render.com/docs/free), [Render Blueprint schema](https://render.com/docs/blueprint-spec), [Gemini pricing](https://ai.google.dev/gemini-api/docs/pricing), [Overpass public instances](https://wiki.openstreetmap.org/wiki/Overpass_API#Public_Overpass_API_instances).

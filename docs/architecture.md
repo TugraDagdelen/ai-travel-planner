@@ -7,7 +7,8 @@ flowchart LR
     Service --> Demo[Explicit offline fixtures]
     Service --> Gateway[Bounded HTTPX gateway and cache]
     Gateway --> Meteo[Open-Meteo city and forecast]
-    Gateway --> OSM[OSM Overpass]
+    Gateway --> Wiki[Wikipedia geosearch + Wikidata types]
+    Gateway --> OSM[OSM Overpass fallback]
     UI -->|Explicit status/check| AIAPI[AI routes]
     AIAPI --> Gate[Free-only model and account gates]
     Gate -->|One structured check| Gemini[Gemini Developer API]
@@ -17,7 +18,7 @@ flowchart LR
 ## Boundaries
 
 - `frontend/src/components/DiscoveryPanel.tsx`: explicit city choice, independent loading/errors, cancellation, provenance and opt-in demo.
-- `frontend/src/services/discovery.ts` and `types/discovery.ts`: typed requests/responses; 30-second client timeout.
+- `frontend/src/services/discovery.ts` and `types/discovery.ts`: typed requests/responses; 30-second city/weather and 50-second place timeouts.
 - `backend/app/api/routes/discovery.py`: input validation; server-resolved IDs, known modes/categories and bounded dates/radii.
 - `backend/app/services/discovery.py`: normalization, local forecast window, place deduplication and provenance.
 - `backend/app/services/gateway.py`: fixed official endpoints, shared HTTPX client, serialization, cache and budgets.
@@ -34,9 +35,9 @@ Search `/api/destinations?q=Paris&language=en&mode=live`, optionally `country_co
 
 `/api/weather` requires start/end dates (1–14 inclusive days). Only the intersection with today through today + 15 in the destination time zone is fetched. Returned days preserve the original dates. Missing values are null; unavailable days use `missing_data` or `outside_forecast_horizon`. No different-date forecast or historic weather is substituted. Units: °C, mm, percent. Status: ok/partial/unavailable.
 
-`/api/places` requires 1–5 repeated `categories`: museum/historic/park/attraction/restaurant. Radius: 250–3000 metres (UI: 1500). Overpass requests at most 120 records with a 15-second query timeout; up to 40 survive filtering. Truncation and omitted records are explicit. UI interests map culture → historic/museum, art → museum, nature → park, food → restaurant.
+`/api/places` requires 1–5 repeated `categories`: museum/historic/park/attraction/restaurant. Radius: 250–3000 metres (UI: 1500). The primary path requests up to 250 nearby, primary-coordinate Wikipedia pages and classifies only requested types through Wikidata; up to 40 survive validation. If Wikimedia fails, a bounded Overpass query provides an independent real-data fallback. Truncation and omitted records are explicit. UI interests map culture → historic/museum, art → museum, nature → park, food → restaurant.
 
-Places retain OSM IDs and record links. Deduplication uses stable IDs, or same normalized name/category within 50 metres. Known coordinates beyond the radius are omitted. Missing coordinates stay null/unpinned; way/relation centers are labeled and may not be entrances. Distances are straight-line. Indoor/outdoor evidence distinguishes OSM tags, category inference and unknown. No invented prices, ratings, hours or walking times.
+Places retain stable Wikidata or OSM IDs and record links. Known coordinates beyond the radius are omitted. OSM fallback records preserve missing-coordinate and geometry-center caveats. Distances are straight-line. Indoor/outdoor evidence distinguishes provider tags, category inference and unknown. No invented prices, ratings, hours or walking times.
 
 Metadata includes mode, source/link, fetched timestamp and cache status. No-fetch weather has no timestamp; demo has no external source link. HTTP 422 indicates input errors, 409 expired/unknown city, 429 limits and 503 provider failures. Safe errors do not echo notes or credentials; Retry-After is forwarded where applicable.
 
@@ -56,8 +57,8 @@ The official SDK is forced to the Gemini Developer API host and a fixed model ID
 |---|---|
 | Request deadline | 25 seconds, including queue/rate-limit waits |
 | Response limit | 2 MB; no redirects |
-| Concurrency | One request per provider group: Meteo or Overpass |
-| Minimum spacing | Meteo 1 second; Overpass 3 seconds |
+| Concurrency | One request per provider group: Meteo, Wikimedia or Overpass |
+| Minimum spacing | Meteo/Wikimedia 1 second; Overpass 3 seconds |
 | Call budget | 120/hour and 600/day per group/process; retries count |
 | Retry | At most once for 502/503/504 with short wait; none for 429 |
 | Cooldown | Retry-After respected; no endpoint/key rotation |
@@ -68,7 +69,7 @@ The official SDK is forced to the Gemini Developer API host and a fixed model ID
 | Gemini local budget | 2/minute and 10/day per process; successful and failed external calls count |
 | Gemini retry | SDK attempts = 1; no application retry; 429 Retry-After/RetryInfo starts cooldown |
 
-Caches and limits reset on restart. JSON parse, oversize and Overpass runtime errors are not cached. Structurally invalid data is rejected before display, though a JSON-valid discovery body can remain cached until expiry. Local budgets are safeguards, not a billing or distributed quota guarantee.
+Caches and limits reset on restart. JSON parse, oversize and provider runtime errors are not cached. Structurally invalid data is rejected before display, though a JSON-valid discovery body can remain cached until expiry. Local budgets are safeguards, not a billing or distributed quota guarantee.
 
 ## Product layer
 

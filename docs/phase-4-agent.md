@@ -1,12 +1,12 @@
 # Phase 4 — bounded itinerary agent
 
-Updated: **2026-10-30**. The implementation is local and single-user. Automated tests are offline. No eligible Gemini key was available, so live model inference is not claimed.
+Updated: **2026-11-01**. The implementation is local and single-user. Automated tests remain offline. A complete live two-day Paris itinerary was also verified in Docker with the operator-confirmed Free Tier key, Open-Meteo weather and Wikimedia/Wikidata places.
 
 ## Generation modes
 
 | Mode | Data | Model call | Persistence |
 |---|---|---|---|
-| `ai` | Live Open-Meteo/OSM | Gemini, only after free-tier gates pass | SQLite |
+| `ai` | Live Open-Meteo + Wikimedia/Wikidata (Overpass fallback) | Gemini, only after free-tier gates pass | SQLite |
 | `deterministic` | Live Open-Meteo/OSM | None | SQLite |
 | `demo` | Explicit synthetic fixtures | None | SQLite, clearly labelled demo |
 
@@ -14,7 +14,7 @@ Modes never change automatically. `demo` requires `data_mode=demo`; the other mo
 
 ## Function-calling loop
 
-The server uses the official `google-genai` SDK with automatic function execution disabled. The model receives two declarations: `get_weather` and `search_places`. Each requested call is parsed through a Pydantic argument model, restricted to the chosen destination, exact dates, allowed categories and a 250–3000 metre radius, then dispatched by the local registry. Tool responses return to the model as function responses.
+The server uses the official `google-genai` SDK with automatic function execution disabled. The model first receives two declarations: `get_weather` and `search_places`. Each requested call is parsed through a Pydantic argument model, restricted to the chosen destination, exact dates, allowed categories and a 250–3000 metre radius, then dispatched by the local registry. Tool responses return to the model; after both evidence tools complete, a separate no-tool turn requests the schema-constrained final JSON. Separating function calling from structured output avoids the model/API request rejection seen when both modes were combined.
 
 The whole run is limited to 6 model turns, 6 tool calls and 75 seconds by default. The SDK has no automatic retry. Process-local minute/day budgets, one concurrent Gemini request, quota cooldown, endpoint/model allowlists and a 256 KiB transport response cap remain active. Unknown tools, invalid arguments, incomplete evidence, malformed model JSON, step/tool limits and timeouts fail before storage.
 

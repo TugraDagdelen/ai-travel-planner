@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Literal
 
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -32,3 +33,5 @@ class Settings(BaseSettings):
     provider_daily_limit: int = Field(default=600, ge=1, le=2000)
     meteo_min_interval_seconds: float = Field(default=1, ge=0, le=10)
     overpass_min_interval_seconds: float = Field(default=3, ge=0, le=30)
+    wikimedia_min_interval_seconds: float = Field(default=1, ge=0, le=10)
+    places_provider: Literal["wikimedia", "overpass"] = "wikimedia"
