@@ -36,11 +36,21 @@ CATEGORY_FILTERS = {
     "restaurant": ('node', '["amenity"="restaurant"]'),
 }
 WIKIDATA_ROOTS = {
-    "museum": "Q33506",
-    "historic": "Q839954",
-    "park": "Q22698",
-    "attraction": "Q570116",
-    "restaurant": "Q11707",
+    "museum": ("Q33506",),
+    "historic": ("Q839954",),
+    "park": ("Q22698", "Q179049"),
+    # Broad natural and settlement roots keep region-defining destinations such as
+    # Termal, waterfalls, beaches and hot springs in small-city discovery.
+    "attraction": (
+        "Q570116",
+        "Q3957",
+        "Q34038",
+        "Q23397",
+        "Q177380",
+        "Q40080",
+        "Q8502",
+    ),
+    "restaurant": ("Q11707",),
 }
 WEATHER_FIELDS = {
     "temperature_2m_min": ("temperature_min", -100, 70, "°C"),
@@ -88,14 +98,7 @@ class DiscoveryService:
 
     @staticmethod
     def city_radius(destination: Destination) -> int:
-        """Choose a broad city-scale radius when no administrative boundary is available."""
-        population = destination.population
-        if population is None:
-            return 20_000
-        if population < 100_000:
-            return 15_000
-        if population < 1_000_000:
-            return 20_000
+        """Use a 50 km diameter around the selected city center."""
         return 25_000
 
     @staticmethod
@@ -367,18 +370,32 @@ class DiscoveryService:
     ) -> PlacesResponse:
         terms = {
             "tr": {
-                "museum": "müze",
-                "historic": "tarihi yer",
-                "park": "park",
-                "attraction": "turistik yer",
-                "restaurant": "restoran",
+                "museum": ("müze",),
+                "historic": ("tarihi yer", "köşk", "anıt"),
+                "park": ("park", "tabiat parkı", "mesire alanı"),
+                "attraction": (
+                    "turistik yer",
+                    "termal",
+                    "kaplıca",
+                    "şelale",
+                    "plaj",
+                    "seyir noktası",
+                ),
+                "restaurant": ("restoran",),
             },
             "en": {
-                "museum": "museum",
-                "historic": "historic site",
-                "park": "park",
-                "attraction": "tourist attraction",
-                "restaurant": "restaurant",
+                "museum": ("museum",),
+                "historic": ("historic site", "monument"),
+                "park": ("park", "nature park", "picnic area"),
+                "attraction": (
+                    "tourist attraction",
+                    "thermal spa",
+                    "hot spring",
+                    "waterfall",
+                    "beach",
+                    "viewpoint",
+                ),
+                "restaurant": ("restaurant",),
             },
         }[language]
         latitude_delta = radius / 111_320
@@ -414,6 +431,14 @@ class DiscoveryService:
                 ("tourism", "attraction"),
                 ("tourism", "viewpoint"),
                 ("tourism", "theme_park"),
+                ("tourism", "picnic_site"),
+                ("leisure", "spa"),
+                ("natural", "hot_spring"),
+                ("natural", "waterfall"),
+                ("natural", "beach"),
+                ("amenity", "public_bath"),
+                ("place", "town"),
+                ("place", "village"),
             },
             "restaurant": {("amenity", "restaurant")},
         }
@@ -422,11 +447,12 @@ class DiscoveryService:
         payloads = []
         last_error: ProviderError | None = None
         for category in categories:
-            try:
-                payload = await self.gateway.request(
-                    "nominatim_search",
-                    {
-                        "q": f"{terms[category]} {destination.name}",
+            for term in terms[category]:
+                try:
+                    payload = await self.gateway.request(
+                        "nominatim_search",
+                        {
+                            "q": f"{term} {destination.name}",
                         "format": "jsonv2",
                         "limit": 30,
                         "addressdetails": 1,
@@ -435,76 +461,79 @@ class DiscoveryService:
                         "accept-language": language,
                         "viewbox": viewbox,
                         "bounded": 1,
-                    },
-                    ttl=86400,
-                )
-            except ProviderError as exc:
-                last_error = exc
-                continue
-            payloads.append(payload)
-            records = payload.data.get("results", [])
-            if not isinstance(records, list):
-                skipped += 1
-                continue
-            for record in records:
-                try:
-                    source_type = (record["category"], record["type"])
-                    if source_type not in allowed_types[category]:
-                        continue
-                    kind = record["osm_type"]
-                    identifier = int(record["osm_id"])
-                    if kind not in {"node", "way", "relation"} or identifier <= 0:
-                        raise ValueError("invalid OSM identity")
-                    namedetails = record.get("namedetails", {})
-                    name = (
-                        namedetails.get(f"name:{language}")
-                        or record.get("name")
-                        or namedetails.get("name")
+                        },
+                        ttl=86400,
                     )
-                    if not isinstance(name, str) or not name.strip():
-                        raise ValueError("missing place name")
-                    lat, lon = float(record["lat"]), float(record["lon"])
-                    meters = distance(
-                        destination.latitude, destination.longitude, lat, lon
-                    )
-                    if meters > radius:
-                        continue
-                    identity = f"osm:{kind}:{identifier}"
-                    if any(place.id == identity for place in places):
-                        continue
-                    display_name = record.get("display_name")
-                    places.append(
-                        Place(
-                            id=identity,
-                            name=name.strip()[:200],
-                            category=category,
-                            latitude=lat,
-                            longitude=lon,
-                            coordinate_kind=(
-                                "node" if kind == "node" else "geometry_center"
-                            ),
-                            distance_m=meters,
-                            indoor=(
-                                "indoor"
-                                if category == "museum"
-                                else (
-                                    "outdoor"
-                                    if category in {"park", "attraction"}
-                                    else "unknown"
-                                )
-                            ),
-                            classification_basis="osm_tag",
-                            source_url=f"https://www.openstreetmap.org/{kind}/{identifier}",
-                            description=(
-                                display_name.strip()[:600]
-                                if isinstance(display_name, str)
-                                else None
-                            ),
-                            tags={"osm_category": source_type[0], "osm_type": source_type[1]},
-                        )
-                    )
-                except (KeyError, TypeError, ValueError, AttributeError):
+                except ProviderError as exc:
+                    last_error = exc
+                    continue
+                payloads.append(payload)
+                records = payload.data.get("results", [])
+                if not isinstance(records, list):
                     skipped += 1
+                    continue
+                for record in records:
+                    try:
+                        source_type = (record["category"], record["type"])
+                        if source_type not in allowed_types[category]:
+                            continue
+                        kind = record["osm_type"]
+                        identifier = int(record["osm_id"])
+                        if kind not in {"node", "way", "relation"} or identifier <= 0:
+                            raise ValueError("invalid OSM identity")
+                        namedetails = record.get("namedetails", {})
+                        name = (
+                            namedetails.get(f"name:{language}")
+                            or record.get("name")
+                            or namedetails.get("name")
+                        )
+                        if not isinstance(name, str) or not name.strip():
+                            raise ValueError("missing place name")
+                        lat, lon = float(record["lat"]), float(record["lon"])
+                        meters = distance(
+                            destination.latitude, destination.longitude, lat, lon
+                        )
+                        if meters > radius:
+                            continue
+                        identity = f"osm:{kind}:{identifier}"
+                        if any(place.id == identity for place in places):
+                            continue
+                        display_name = record.get("display_name")
+                        places.append(
+                            Place(
+                                id=identity,
+                                name=name.strip()[:200],
+                                category=category,
+                                latitude=lat,
+                                longitude=lon,
+                                coordinate_kind=(
+                                    "node" if kind == "node" else "geometry_center"
+                                ),
+                                distance_m=meters,
+                                indoor=(
+                                    "indoor"
+                                    if category == "museum"
+                                    else (
+                                        "outdoor"
+                                        if category in {"park", "attraction"}
+                                        else "unknown"
+                                    )
+                                ),
+                                classification_basis="osm_tag",
+                                source_url=f"https://www.openstreetmap.org/{kind}/{identifier}",
+                                description=(
+                                    display_name.strip()[:600]
+                                    if isinstance(display_name, str)
+                                    else None
+                                ),
+                                tags={
+                                    "osm_category": source_type[0],
+                                    "osm_type": source_type[1],
+                                },
+                            )
+                        )
+                    except (KeyError, TypeError, ValueError, AttributeError):
+                        skipped += 1
         if not payloads:
             if last_error is not None:
                 raise last_error
@@ -717,7 +746,9 @@ class DiscoveryService:
                     }
                 )
             return empty_response
-        roots = {WIKIDATA_ROOTS[category]: category for category in categories}
+        roots = {
+            qid: category for category in categories for qid in WIKIDATA_ROOTS[category]
+        }
         root_values = " ".join(f"wd:{qid}" for qid in roots)
         bindings = []
         typed_payloads = []
@@ -770,7 +801,7 @@ class DiscoveryService:
                         ),
                         classification_basis="category_inference",
                         source_url=f"https://www.wikidata.org/wiki/{qid}",
-                        tags={"wikidata": qid},
+                        tags={"wikidata": qid, "wikidata_root": root},
                     )
                 )
             except (KeyError, TypeError, ValueError, AttributeError):

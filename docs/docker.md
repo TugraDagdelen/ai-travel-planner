@@ -24,19 +24,19 @@ GEMINI_MODEL=gemini-3.5-flash-lite
 GEMINI_FREE_TIER_CONFIRMED=true
 ```
 
-Pass that file to Compose only for local variable substitution:
+Start the application with the normal command:
 
 ```bash
-docker compose --env-file backend/.env up --build
+docker compose up --build
 ```
 
-Compose sends only the declared variables into the container. The container allows up to 60 seconds for a Gemini response because Docker networking can be slower on its first request; request-count and free-tier safeguards remain active. Google Maps and Search grounding remain disabled. Check the connection in the application before the presentation.
+Compose automatically reads the optional ignored `backend/.env` file and sends those values into the container at runtime. `.dockerignore` prevents the file from being copied into the image. The container allows up to 60 seconds for a Gemini response because Docker networking can be slower on its first request; request-count and free-tier safeguards remain active. Google Maps and Search grounding remain disabled. Check the connection in the application before the presentation.
 
 ## Presentation-day checklist
 
 1. Start Docker Desktop and wait until its engine is ready.
 2. Run `git pull` in the existing clone, or clone the repository on the presentation computer.
-3. Run `docker compose up --build` for the keyless demo, or use the `--env-file` command for Gemini.
+3. Run `docker compose up --build`; it uses Gemini when `backend/.env` is present and otherwise starts in keyless mode.
 4. Wait for the line containing `Uvicorn running on http://0.0.0.0:8000`.
 5. Open `http://localhost:8000/api/health`, then `http://localhost:8000`.
 6. Keep one saved demo itinerary ready in case a public data provider is temporarily unavailable.

@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import App from '../src/App'
 import { validatePreferences } from '../src/services/api'
 import { fetchPlaces, fetchWeather, searchDestinations } from '../src/services/discovery'
-import { deleteTrip, generateTrip, getTrip, listTrips, reviseTrip } from '../src/services/itinerary'
+import { deleteTrip, generateTrip, getTrip, getTripPlaces, listTrips, reviseTrip } from '../src/services/itinerary'
 import type { Destination, Place } from '../src/types/discovery'
 import type { TripRecord } from '../src/types/itinerary'
 import type { TripRequest } from '../src/types/trip'
@@ -13,7 +13,7 @@ import type { TripRequest } from '../src/types/trip'
 vi.mock('../src/components/ItineraryMap', () => ({ ItineraryMap: () => <div aria-label="Rota haritası">fixture map</div> }))
 vi.mock('../src/services/api', () => ({ fetchHealth: vi.fn().mockResolvedValue({ status: 'ok', service: 'ai-travel-planner', phase: 6, version: '0.6.0' }), validatePreferences: vi.fn(), isConnectionError: () => false }))
 vi.mock('../src/services/discovery', () => ({ searchDestinations: vi.fn(), fetchWeather: vi.fn(), fetchPlaces: vi.fn(), dataError: () => ({ code: 'provider_invalid_response', retryAfter: 0 }) }))
-vi.mock('../src/services/itinerary', () => ({ generateTrip: vi.fn(), reviseTrip: vi.fn(), listTrips: vi.fn(), getTrip: vi.fn(), renameTrip: vi.fn(), deleteTrip: vi.fn(), tripError: () => ({ code: 'failed', message: 'failed', retryable: false }) }))
+vi.mock('../src/services/itinerary', () => ({ generateTrip: vi.fn(), reviseTrip: vi.fn(), listTrips: vi.fn(), getTrip: vi.fn(), getTripPlaces: vi.fn(), editTripActivity: vi.fn(), renameTrip: vi.fn(), deleteTrip: vi.fn(), tripError: () => ({ code: 'failed', message: 'failed', retryable: false }) }))
 
 const destination: Destination = { id: 'demo:paris', name: 'Paris', country: 'France', country_code: 'FR', region: 'Île-de-France', latitude: 48.85, longitude: 2.35, timezone: 'Europe/Paris', source_url: null }
 const places: Place[] = [
@@ -38,6 +38,7 @@ describe('complete fixture-backed demo journey', () => {
     vi.mocked(fetchPlaces).mockResolvedValue({ destination_id: destination.id, places, radius_m: 1500, result_limit: 40, truncated: false, skipped_records: 0, metadata: { mode: 'demo', source: 'Synthetic demo', source_url: null, fetched_at: null, cached: false } })
     vi.mocked(generateTrip).mockResolvedValue(trip)
     vi.mocked(getTrip).mockResolvedValue(trip)
+    vi.mocked(getTripPlaces).mockResolvedValue(places)
     vi.mocked(reviseTrip).mockResolvedValue({ ...trip, version: 2, revisions: [{ instruction: '2. günü değiştir', result_summary: '2. günün ilk durağı güncellendi.', version: 2, created_at: '2027-01-31T01:00:00Z' }] })
     vi.mocked(deleteTrip).mockResolvedValue()
     vi.mocked(listTrips).mockResolvedValue({ trips: [], total: 0 })

@@ -8,7 +8,7 @@ import { deleteTrip, getTrip, listTrips, renameTrip, reviseTrip } from '../src/s
 import type { TripRecord } from '../src/types/itinerary'
 
 vi.mock('../src/components/ItineraryMap', () => ({ ItineraryMap: () => <div aria-label="Rota haritası">map</div> }))
-vi.mock('../src/services/itinerary', () => ({ listTrips: vi.fn(), getTrip: vi.fn(), renameTrip: vi.fn(), deleteTrip: vi.fn(), reviseTrip: vi.fn(), tripError: () => ({ code: 'failed', message: 'failed', retryable: false }) }))
+vi.mock('../src/services/itinerary', () => ({ listTrips: vi.fn(), getTrip: vi.fn(), getTripPlaces: vi.fn().mockResolvedValue([]), editTripActivity: vi.fn(), renameTrip: vi.fn(), deleteTrip: vi.fn(), reviseTrip: vi.fn(), tripError: () => ({ code: 'failed', message: 'failed', retryable: false }) }))
 
 const trip: TripRecord = {
   id: 'trip-1', title: 'Paris planı', request: { destination: 'Paris', start_date: '2027-02-01', end_date: '2027-02-02', interests: ['culture'], budget: 'balanced', pace: 'relaxed', language: 'tr', notes: '' },

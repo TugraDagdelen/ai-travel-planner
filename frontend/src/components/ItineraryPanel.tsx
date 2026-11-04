@@ -8,6 +8,7 @@ import type { GenerationMode, TripRecord } from '../types/itinerary'
 import type { Language, TripRequest } from '../types/trip'
 import { ItineraryView } from './ItineraryView'
 import { RevisionPanel } from './RevisionPanel'
+import { PlanEditor } from './PlanEditor'
 
 export interface DestinationSelection { destination: Destination; mode: DataMode }
 
@@ -31,6 +32,6 @@ export function ItineraryPanel({ request, language, selection }: { request: Trip
     <span className="tiny-eyebrow">{t.eyebrow}</span><h2><Route size={25}/>{t.title}</h2><p>{t.intro}</p>
     {!selection ? <p className="itinerary-prompt">{t.choose}</p> : !trip && <><div className="mode-select itinerary-mode"><label htmlFor="generation-mode">{t.mode}</label><select id="generation-mode" value={mode} disabled={loading} onChange={event => setMode(event.target.value as GenerationMode)}>{selection.mode === 'demo' ? <option value="demo">{t.demo}</option> : <><option value="deterministic">{t.deterministic}</option><option value="ai">{t.ai}</option></>}</select></div><p className="generation-hint">{hint}</p>{mode === 'ai' && <p className="privacy-hint"><Bot size={16}/>{t.privacy}</p>}<button type="button" className="primary-button" onClick={() => void create()} disabled={loading}>{loading ? <RefreshCw className="spin" size={16}/> : <Route size={16}/>} {loading ? t.generating : t.generate}</button></>}
     {error && <div className="data-error" role="alert"><p>{t.failed}</p><p>{error}</p></div>}
-    {trip && <><div className="saved-actions"><Link to={`/trips/${trip.id}`}>{language === 'tr' ? 'Kayıtlı planı aç' : 'Open saved plan'}<ExternalLink size={14}/></Link></div><ItineraryView trip={trip} language={language}/><RevisionPanel trip={trip} language={language} onChange={setTrip}/></>}
+    {trip && <><div className="saved-actions"><Link to={`/trips/${trip.id}`}>{language === 'tr' ? 'Kayıtlı planı aç' : 'Open saved plan'}<ExternalLink size={14}/></Link></div><ItineraryView trip={trip} language={language}/><PlanEditor trip={trip} language={language} onChange={setTrip}/><RevisionPanel trip={trip} language={language} onChange={setTrip}/></>}
   </section>
 }

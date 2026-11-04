@@ -2,7 +2,9 @@ from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response, status
 
+from app.schemas.discovery import Place
 from app.schemas.itinerary import (
+    EditTripActivityRequest,
     GenerateTripRequest,
     RenameTripRequest,
     ReviseTripRequest,
@@ -40,6 +42,24 @@ def get_trip(trip_id: str, request: Request):
 async def revise(trip_id: str, body: ReviseTripRequest, request: Request):
     try:
         return await request.app.state.itineraries.revise(trip_id, body.instruction)
+    except KeyError:
+        raise HTTPException(404, "trip_not_found") from None
+
+
+@router.get("/{trip_id}/places", response_model=list[Place])
+def candidate_places(trip_id: str, request: Request):
+    try:
+        return request.app.state.itineraries.candidate_places(trip_id)
+    except KeyError:
+        raise HTTPException(404, "trip_not_found") from None
+
+
+@router.patch("/{trip_id}/activities", response_model=TripRecord)
+def edit_activity(trip_id: str, body: EditTripActivityRequest, request: Request):
+    try:
+        return request.app.state.itineraries.edit_activity(
+            trip_id, body.action, body.date, body.place_id, body.period
+        )
     except KeyError:
         raise HTTPException(404, "trip_not_found") from None
 

@@ -3,13 +3,15 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
 import { ItineraryPanel } from '../src/components/ItineraryPanel'
-import { generateTrip, reviseTrip, tripError } from '../src/services/itinerary'
+import { generateTrip, getTripPlaces, reviseTrip, tripError } from '../src/services/itinerary'
 import type { TripRecord } from '../src/types/itinerary'
 import type { TripRequest } from '../src/types/trip'
 
 vi.mock('../src/services/itinerary', () => ({
   generateTrip: vi.fn(),
   reviseTrip: vi.fn(),
+  getTripPlaces: vi.fn(),
+  editTripActivity: vi.fn(),
   tripError: vi.fn(() => ({ code: 'unknown', message: 'failed', retryable: false })),
 }))
 vi.mock('../src/components/ItineraryMap', () => ({ ItineraryMap: () => <div>map</div> }))
@@ -45,6 +47,7 @@ describe('ItineraryPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(tripError).mockReturnValue({ code: 'unknown', message: 'failed', retryable: false })
+    vi.mocked(getTripPlaces).mockResolvedValue([place])
   })
 
   it('requires a city selection', () => {

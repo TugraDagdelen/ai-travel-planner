@@ -130,6 +130,14 @@ class ReviseTripRequest(BaseModel):
     instruction: str = Field(min_length=3, max_length=500)
 
 
+class EditTripActivityRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    action: Literal["add", "remove"]
+    date: date
+    place_id: str = Field(min_length=1, max_length=120)
+    period: Period | None = None
+
+
 class RenameTripRequest(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
     title: str = Field(min_length=2, max_length=120)

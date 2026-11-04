@@ -125,7 +125,7 @@ def test_targeted_revision_changes_only_requested_day(client):
     assert after["revisions"][0]["version"] == 2
 
 
-def test_invalid_modes_ai_readiness_and_insufficient_evidence_fail_closed(client):
+def test_invalid_modes_ai_readiness_and_sparse_evidence_is_reused(client):
     mismatch = generation_body(client)
     mismatch["generation_mode"] = "deterministic"
     assert client.post("/api/trips/generate", json=mismatch).status_code == 422
@@ -141,8 +141,33 @@ def test_invalid_modes_ai_readiness_and_insufficient_evidence_fail_closed(client
 
     long_trip = generation_body(client, days=4)
     result = client.post("/api/trips/generate", json=long_trip)
-    assert result.status_code == 422
-    assert result.json()["code"] == "insufficient_food_evidence"
+    assert result.status_code == 201
+    assert len(result.json()["days"]) == 4
+    assert any("repeat" in warning.lower() for warning in result.json()["warnings"])
+
+
+def test_saved_plan_stops_can_be_removed_and_added(client):
+    trip = client.post("/api/trips/generate", json=generation_body(client)).json()
+    candidates = client.get(f"/api/trips/{trip['id']}/places")
+    assert candidates.status_code == 200
+    day = trip["days"][0]
+    removed = day["activities"][0]["place"]["id"]
+    response = client.patch(
+        f"/api/trips/{trip['id']}/activities",
+        json={"action": "remove", "date": day["date"], "place_id": removed},
+    )
+    assert response.status_code == 200
+    assert all(
+        item["place"]["id"] != removed for item in response.json()["days"][0]["activities"]
+    )
+    added = client.patch(
+        f"/api/trips/{trip['id']}/activities",
+        json={"action": "add", "date": day["date"], "place_id": removed},
+    )
+    assert added.status_code == 200
+    assert any(
+        item["place"]["id"] == removed for item in added.json()["days"][0]["activities"]
+    )
 
 
 def test_unknown_trip_and_revision_input_are_safe(client):
@@ -280,6 +305,7 @@ def test_ai_loop_dispatches_declared_tools_and_validates_actual_results():
     assert provider_calls == [
         "geocoding-api.open-meteo.com",
         "api.open-meteo.com",
+        "overpass-api.de",
         "overpass-api.de",
         "overpass-api.de",
         "overpass-api.de",

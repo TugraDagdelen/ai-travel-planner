@@ -1,6 +1,7 @@
 import axios from 'axios'
 import { api } from './api'
 import type { GenerateTripRequest, TripList, TripRecord } from '../types/itinerary'
+import type { Place } from '../types/discovery'
 
 export interface TripOperationError { code: string; message: string; retryable: boolean }
 
@@ -11,6 +12,16 @@ export async function generateTrip(body: GenerateTripRequest): Promise<TripRecor
 
 export async function reviseTrip(id: string, instruction: string): Promise<TripRecord> {
   const { data } = await api.post<TripRecord>(`/trips/${encodeURIComponent(id)}/revise`, { instruction }, { timeout: 90000 })
+  return data
+}
+
+export async function getTripPlaces(id: string): Promise<Place[]> {
+  const { data } = await api.get<Place[]>(`/trips/${encodeURIComponent(id)}/places`)
+  return data
+}
+
+export async function editTripActivity(id: string, action: 'add' | 'remove', date: string, placeId: string): Promise<TripRecord> {
+  const { data } = await api.patch<TripRecord>(`/trips/${encodeURIComponent(id)}/activities`, { action, date, place_id: placeId })
   return data
 }
 

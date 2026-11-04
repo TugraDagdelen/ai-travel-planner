@@ -29,7 +29,7 @@ Rota demonstrates how to build a transparent full-stack AI product without hidin
 - Backend-validated preference summary; data stays in React memory while navigating and resets on refresh.
 - Explicit city selection, optional country filtering and ambiguous-city handling.
 - Date-aligned weather, local time zones, missing values and forecast-window handling.
-- City-wide place discovery automatically uses a 15–25 km radius based on city population. Turkish Wikipedia records are preferred, sparse coverage is supplemented from English Wikipedia and OpenStreetMap/Nominatim, and up to 100 results across all five categories are sorted by distance from the city center.
+- City-wide place discovery uses a 25 km radius (50 km diameter). Turkish Wikipedia records are preferred, sparse coverage is supplemented from English Wikipedia and OpenStreetMap/Nominatim, and up to 100 results across all five categories are sorted by distance from the city center. Thermal spas, waterfalls, beaches, viewpoints and other region-defining places are included in attraction research.
 - Independent loading/error/retry states, cached response labels, request limits and an explicit offline demo.
 - Opt-in Gemini status and connection checks with no automatic model, paid-tier or grounding fallback.
 - Bounded manual Gemini function-calling loop with an allowlisted weather/place tool registry.
@@ -130,6 +130,8 @@ The UI also works at `http://localhost:5173`, which is an allowed CORS origin. A
 | POST | `/api/trips/generate` | Generate, validate and persist an AI, deterministic or demo itinerary |
 | GET | `/api/trips` | List saved local trips |
 | GET | `/api/trips/{id}` | Read one saved trip |
+| GET | `/api/trips/{id}/places` | Read the verified candidate places saved with a trip |
+| PATCH | `/api/trips/{id}/activities` | Add or remove a verified place on a chosen itinerary day |
 | POST | `/api/trips/{id}/revise` | Revise from stored evidence without refetching providers |
 | PATCH | `/api/trips/{id}` | Rename a saved trip |
 | DELETE | `/api/trips/{id}` | Delete a saved trip |
@@ -250,7 +252,7 @@ Run the complete production build locally in one container:
 docker compose up --build
 ```
 
-Then open [http://localhost:8000](http://localhost:8000). This keyless command supports the complete demo flow. To enable the locally configured Gemini Free Tier key without copying it into the image, use `docker compose --env-file backend/.env up --build`. The named `travel-data` volume preserves SQLite trips across normal container restarts. See the [Docker presentation guide](docs/docker.md) for clean-machine and presentation-day instructions.
+Then open [http://localhost:8000](http://localhost:8000). This command supports the complete demo flow and automatically reads `backend/.env` when that ignored local file exists; no alternate Compose command is needed for Gemini. The key is injected only at runtime and is excluded from the image. The named `travel-data` volume preserves SQLite trips across normal container restarts. See the [Docker presentation guide](docs/docker.md) for clean-machine and presentation-day instructions.
 
 ## Roadmap
 

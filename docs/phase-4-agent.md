@@ -14,7 +14,7 @@ Modes never change automatically. `demo` requires `data_mode=demo`; the other mo
 
 ## Function-calling loop
 
-The server uses the official `google-genai` SDK with automatic function execution disabled. The model first receives two declarations: `get_weather` and `search_places`. Each requested call is restricted to the chosen destination, exact dates, server-owned categories and a 10 km city-wide radius, then dispatched by the local registry. Tool responses return to the model; after both evidence tools complete, a separate no-tool turn requests the schema-constrained final JSON. Separating function calling from structured output avoids the model/API request rejection seen when both modes were combined.
+The server uses the official `google-genai` SDK with automatic function execution disabled. The model first receives two declarations: `get_weather` and `search_places`. Each requested call is restricted to the chosen destination, exact dates, all five server-owned place categories and a 25 km radius, then dispatched by the local registry. Tool responses return to the model; after both evidence tools complete, a separate no-tool turn requests the schema-constrained final JSON. Separating function calling from structured output avoids the model/API request rejection seen when both modes were combined.
 
 The whole run is limited to 6 model turns, 6 tool calls and 75 seconds by default. The SDK has no automatic retry. Process-local minute/day budgets, one concurrent Gemini request, quota cooldown, endpoint/model allowlists and a 256 KiB transport response cap remain active. Unknown tools, invalid arguments, incomplete evidence, malformed model JSON, step/tool limits and timeouts fail before storage.
 

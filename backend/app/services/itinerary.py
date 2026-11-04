@@ -1,5 +1,6 @@
 import asyncio
 import json
+import math
 import re
 import time
 from datetime import date, timedelta
@@ -9,7 +10,7 @@ from google.genai import types
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from app.core.config import Settings
-from app.schemas.discovery import Category, Place, PlacesResponse, WeatherResponse
+from app.schemas.discovery import Category, Destination, Place, PlacesResponse, WeatherResponse
 from app.schemas.itinerary import (
     AgentActivity,
     EvidenceBundle,
@@ -24,6 +25,7 @@ from app.schemas.itinerary import (
     TripRecord,
     utc_now,
 )
+from app.services.discovery import normalized
 from app.services.gemini import AIError
 
 CATEGORIES: dict[str, list[Category]] = {
@@ -79,7 +81,9 @@ class ToolRegistry:
 
     @property
     def categories(self) -> list[Category]:
-        return sorted({c for interest in self.body.request.interests for c in CATEGORIES[interest]})
+        # Planning always researches the complete destination. User interests affect
+        # ranking, while broad evidence prevents sparse-city and long-trip failures.
+        return ["museum", "historic", "park", "attraction", "restaurant"]
 
     async def execute(self, name: str, arguments: dict) -> dict:
         started = time.perf_counter()
@@ -197,65 +201,168 @@ def rain(day) -> bool:
     )
 
 
-def score(place: Place, interests: list[str], rainy: bool) -> float:
+def score(
+    place: Place,
+    interests: list[str],
+    rainy: bool,
+    destination: Destination | None = None,
+    notes: str = "",
+) -> float:
     preferred = {c for interest in interests for c in CATEGORIES[interest]}
     values = []
     values.append((35, 1.0 if place.category in preferred else 0.0))
-    values.append((20, 1.0 if place.classification_basis in {"osm_tag", "synthetic"} else 0.65))
+    values.append(
+        (12, 1.0 if place.classification_basis in {"osm_tag", "synthetic"} else 0.75)
+    )
     if place.distance_m is not None:
-        values.append((20, max(0.0, 1 - place.distance_m / 10000)))
-    if place.pageviews_30d is not None:
-        # Wikipedia readership is an interest signal, not a quality score or review rating.
-        values.append((15, min(1.0, place.pageviews_30d / 50_000)))
+        values.append((12, max(0.0, 1 - place.distance_m / 25_000)))
+    # Missing readership is kept at zero so an unknown place cannot outrank a
+    # well-described landmark merely because its score has a smaller denominator.
+    pageviews = place.pageviews_30d or 0
+    values.append((25, min(1.0, math.log10(pageviews + 1) / 3)))
+    searchable = normalized(" ".join(filter(None, (place.name, place.description))))
+    local_terms: set[str] = set()
+    if destination is not None:
+        local_terms = {
+            normalized(value)
+            for value in (destination.name, destination.region)
+            if value and len(normalized(value)) >= 4
+        }
+        values.append((10, 1.0 if any(term in searchable for term in local_terms) else 0.0))
+    note_terms = {
+        token
+        for token in normalized(notes).replace(",", " ").replace(".", " ").split()
+        if len(token) >= 4
+    }
+    if note_terms:
+        name_terms = {
+            token for token in normalized(place.name).replace(",", " ").split() if len(token) >= 4
+        }
+        direct_matches = len(note_terms & name_terms)
+        values.append((30, min(1.0, direct_matches / min(2, len(name_terms) or 1))))
     if rainy:
         indoor_value = (
             1.0 if place.indoor == "indoor" else (0.5 if place.indoor == "unknown" else 0)
         )
         values.append((15, indoor_value))
-    return sum(weight * value for weight, value in values) / sum(weight for weight, _ in values)
+    result = sum(weight * value for weight, value in values) / sum(
+        weight for weight, _ in values
+    )
+    # Nearby settlements are useful discovery results, but should not displace a
+    # city's landmarks merely because another town lies across a bay. Keep a
+    # settlement at full strength when its title explicitly belongs to the city/region.
+    if (
+        place.tags.get("wikidata_root") == "Q3957"
+        and local_terms
+        and not any(term in normalized(place.name) for term in local_terms)
+    ):
+        result *= 0.7
+    return result
 
 
 def deterministic_proposal(body: GenerateTripRequest, evidence: EvidenceBundle) -> PlanProposal:
     dates = [body.request.start_date + timedelta(days=i) for i in range(body.request.duration_days)]
-    if len(evidence.places) < len(dates):
+    if not evidence.places:
         raise AIError("insufficient_place_evidence", 422)
     weather = {item.date: item for item in evidence.weather}
-    unused = list(evidence.places)
     days = []
     per_day = {"relaxed": 1, "balanced": 2, "active": 3}[body.request.pace]
     food_selected = "food" in body.request.interests
     non_food_selected = any(interest != "food" for interest in body.request.interests)
-    if food_selected:
-        restaurant_count = sum(place.category == "restaurant" for place in unused)
-        visit_count = sum(place.category != "restaurant" for place in unused)
-        if restaurant_count < len(dates) or (non_food_selected and visit_count < len(dates)):
-            raise AIError("insufficient_food_evidence", 422)
+    restaurants = [place for place in evidence.places if place.category == "restaurant"]
+    visits = [place for place in evidence.places if place.category != "restaurant"]
+    use_count = {place.id: 0 for place in evidence.places}
+
+    def separation(left: Place, right: Place) -> float:
+        if None in (left.latitude, left.longitude, right.latitude, right.longitude):
+            return math.inf
+        lat1, lat2 = math.radians(left.latitude), math.radians(right.latitude)
+        delta_lat = lat2 - lat1
+        delta_lon = math.radians(right.longitude - left.longitude)
+        value = (
+            math.sin(delta_lat / 2) ** 2
+            + math.cos(lat1) * math.cos(lat2) * math.sin(delta_lon / 2) ** 2
+        )
+        return 6_371_000 * 2 * math.asin(math.sqrt(min(1, value)))
+
+    reused_categories: set[Category] = set()
     for trip_date in dates:
-        ordered = sorted(
-            unused,
+        rainy = rain(weather[trip_date])
+        visit_pool = visits if visits else list(evidence.places)
+        selected: list[Place] = []
+        visit_target = (
+            min(2, per_day)
+            if food_selected and non_food_selected and restaurants
+            else (0 if food_selected and restaurants and not non_food_selected else per_day)
+        )
+        seed_order = sorted(
+            visit_pool,
             key=lambda item: (
-                -score(item, body.request.interests, rain(weather[trip_date])),
+                use_count[item.id],
+                -score(
+                    item,
+                    body.request.interests,
+                    rainy,
+                    evidence.destination,
+                    body.request.notes,
+                ),
+                item.distance_m if item.distance_m is not None else 10**9,
                 item.id,
             ),
         )
-        if food_selected:
-            restaurant = next((item for item in ordered if item.category == "restaurant"), None)
-            visits = [item for item in ordered if item.category != "restaurant"]
-            visit_target = max(1, per_day - 1) if non_food_selected else 0
-            remaining_days = len(dates) - len(days)
-            available_now = max(0, len(visits) - (remaining_days - 1))
-            selected = visits[: min(visit_target, available_now)]
-            if restaurant is not None:
-                selected.append(restaurant)
-        else:
-            selected = ordered[: min(per_day, len(ordered) - max(0, len(dates) - len(days) - 1))]
+        if visit_target and seed_order:
+            selected.append(seed_order[0])
+            while len(selected) < visit_target:
+                remaining = [place for place in visit_pool if place not in selected]
+                if not remaining:
+                    break
+                anchor = selected[-1]
+                remaining.sort(
+                    key=lambda item: (
+                        use_count[item.id],
+                        separation(anchor, item),
+                        -score(
+                            item,
+                            body.request.interests,
+                            rainy,
+                            evidence.destination,
+                            body.request.notes,
+                        ),
+                        item.id,
+                    )
+                )
+                selected.append(remaining[0])
+        if food_selected and restaurants:
+            anchor = selected[-1] if selected else None
+            ordered_food = sorted(
+                restaurants,
+                key=lambda item: (
+                    use_count[item.id],
+                    separation(anchor, item) if anchor is not None else 0,
+                    -score(
+                        item,
+                        body.request.interests,
+                        rainy,
+                        evidence.destination,
+                        body.request.notes,
+                    ),
+                    item.id,
+                ),
+            )
+            selected.append(ordered_food[0])
         if not selected:
-            raise AIError("insufficient_place_evidence", 422)
+            selected = seed_order[:1]
         for place in selected:
-            unused.remove(place)
+            if use_count[place.id] > 0:
+                reused_categories.add(place.category)
+            use_count[place.id] += 1
         alternatives = []
-        if rain(weather[trip_date]):
-            alternatives = [p.id for p in unused if p.indoor == "indoor"][:1]
+        if rainy:
+            alternatives = [
+                place.id
+                for place in evidence.places
+                if place.indoor == "indoor" and place not in selected
+            ][:1]
         rainy_reason = (
             "Doğrulanmış verilerden yağışa uygun kapalı alan seçildi."
             if body.request.language == "tr"
@@ -274,7 +381,7 @@ def deterministic_proposal(body: GenerateTripRequest, evidence: EvidenceBundle) 
                         period=("evening" if place.category == "restaurant" else PERIODS[index]),
                         place_id=place.id,
                         reason=rainy_reason
-                        if rain(weather[trip_date]) and place.indoor == "indoor"
+                        if rainy and place.indoor == "indoor"
                         else standard_reason,
                     )
                     for index, place in enumerate(selected)
@@ -286,14 +393,70 @@ def deterministic_proposal(body: GenerateTripRequest, evidence: EvidenceBundle) 
         title=f"{evidence.destination.name} · {len(dates)} "
         f"{'gün' if body.request.language == 'tr' else 'days'}",
         days=days,
-        warnings=[
-            "Bir veya daha fazla tarih için hava verisi yok."
-            if body.request.language == "tr"
-            else "Weather is unavailable for one or more dates."
-        ]
-        if any(not item.available for item in evidence.weather)
-        else [],
+        warnings=(
+            [
+                "Bir veya daha fazla tarih için hava verisi yok."
+                if body.request.language == "tr"
+                else "Weather is unavailable for one or more dates."
+            ]
+            if any(not item.available for item in evidence.weather)
+            else []
+        )
+        + (
+            [
+                (
+                    "Doğrulanmış restoran sayısı gün sayısından az olduğu için yemek "
+                    "durağı bazı günlerde tekrarlandı."
+                    if reused_categories == {"restaurant"}
+                    else "Bazı doğrulanmış duraklar farklı günlerde tekrarlandı."
+                )
+                if body.request.language == "tr"
+                else (
+                    "The meal stop repeats on some days because fewer verified "
+                    "restaurants were available."
+                    if reused_categories == {"restaurant"}
+                    else "Some verified stops repeat on different days."
+                )
+            ]
+            if reused_categories
+            else []
+        ),
     )
+
+
+def explicit_priority_place_ids(
+    body: GenerateTripRequest, evidence: EvidenceBundle
+) -> set[str]:
+    note_text = normalized(body.request.notes)
+    if not note_text:
+        return set()
+    destination_terms = {
+        token
+        for value in (evidence.destination.name, evidence.destination.region)
+        if value
+        for token in normalized(value).split()
+        if len(token) >= 4
+    }
+    generic_terms = {
+        "attraction",
+        "historic",
+        "museum",
+        "muzesi",
+        "restoran",
+        "restaurant",
+        "park",
+        "plaj",
+    }
+    matches = set()
+    for place in evidence.places:
+        name_terms = {
+            token
+            for token in normalized(place.name).replace(",", " ").split()
+            if len(token) >= 5
+        } - destination_terms - generic_terms
+        if name_terms and any(term in note_text for term in name_terms):
+            matches.add(place.id)
+    return matches
 
 
 def validate_proposal(proposal: PlanProposal, body: GenerateTripRequest, evidence: EvidenceBundle):
@@ -312,7 +475,9 @@ def validate_proposal(proposal: PlanProposal, body: GenerateTripRequest, evidenc
             raise AIError("ai_invalid_itinerary", 422)
         if set(day.alternative_place_ids) - known or set(day.alternative_place_ids) & set(ids):
             raise AIError("ai_invalid_itinerary", 422)
-        if "food" in body.request.interests and sum(
+        if "food" in body.request.interests and any(
+            category == "restaurant" for category in categories.values()
+        ) and sum(
             categories.get(place_id) == "restaurant" for place_id in ids
         ) != 1:
             raise AIError("insufficient_food_evidence", 422)
@@ -321,8 +486,8 @@ def validate_proposal(proposal: PlanProposal, body: GenerateTripRequest, evidenc
         ):
             raise AIError("ai_invalid_itinerary", 422)
         used.extend(ids)
-    if len(used) != len(set(used)):
-        raise AIError("ai_duplicate_place", 422)
+    # A sparse destination may repeat a verified stop on a later day instead of
+    # rejecting the complete trip. Periods remain unique within each day.
 
 
 def materialize(proposal: PlanProposal, evidence: EvidenceBundle):
@@ -363,6 +528,12 @@ class ItineraryService:
                     "Use only place_id values returned by search_places.",
                     "Use every trip date exactly once in ascending order.",
                     "Do not repeat a place.",
+                    "Group places that are geographically close on the same day.",
+                    (
+                        "Treat concrete place names in request.notes as explicit user "
+                        "priorities and include a matching verified place_id when available."
+                    ),
+                    "If verified evidence is sparse, repeat a place only as a last resort.",
                     "Return one to three activities per day with unique periods.",
                     (
                         "If food is selected, include exactly one restaurant every day, use "
@@ -456,7 +627,37 @@ class ItineraryService:
                 )
             )
         evidence = registry.evidence()
-        validate_proposal(proposal, body, evidence)
+        repair_summary = ""
+        try:
+            validate_proposal(proposal, body, evidence)
+            priorities = explicit_priority_place_ids(body, evidence)
+            selected = {
+                activity.place_id for day in proposal.days for activity in day.activities
+            }
+            if body.generation_mode == "ai" and priorities and not priorities & selected:
+                repair_summary = (
+                    "Gemini completed function calls; the server applied the user's "
+                    "explicit place priority with verified evidence and proximity rules."
+                )
+                raise AIError("ai_missed_explicit_priority", 422)
+        except AIError:
+            if body.generation_mode != "ai":
+                raise
+            proposal = deterministic_proposal(body, evidence)
+            validate_proposal(proposal, body, evidence)
+            registry.activity.append(
+                AgentActivity(
+                    kind="validation",
+                    name="gemini_plan_repair",
+                    status="partial",
+                    duration_ms=0,
+                    summary=(
+                        repair_summary
+                        or "Gemini completed function calls; the server repaired its invalid "
+                        "final plan with verified evidence and proximity rules."
+                    ),
+                )
+            )
         now = utc_now()
         record = TripRecord(
             id=str(uuid4()),
@@ -623,6 +824,87 @@ class ItineraryService:
                     "Revision reused stored weather and place evidence; "
                     "providers were not called."
                 ),
+            )
+        )
+        stored.revision_instructions.append(instruction)
+        self.repository.save(stored)
+        return record
+
+    def candidate_places(self, trip_id: str) -> list[Place]:
+        stored = self.repository.get(trip_id)
+        if not stored:
+            raise KeyError(trip_id)
+        return sorted(
+            stored.evidence.places,
+            key=lambda place: (
+                place.distance_m if place.distance_m is not None else 10**9,
+                place.name.casefold(),
+            ),
+        )
+
+    def edit_activity(
+        self,
+        trip_id: str,
+        action: str,
+        target_date: date,
+        place_id: str,
+        period: str | None,
+    ) -> TripRecord:
+        stored = self.repository.get(trip_id)
+        if not stored:
+            raise KeyError(trip_id)
+        record = stored.record
+        day = next((item for item in record.days if item.date == target_date), None)
+        if day is None:
+            raise AIError("revision_day_out_of_range", 422)
+        place = next((item for item in stored.evidence.places if item.id == place_id), None)
+        if place is None:
+            raise AIError("ai_invalid_itinerary", 422)
+        if action == "remove":
+            before = len(day.activities)
+            day.activities = [item for item in day.activities if item.place.id != place_id]
+            if len(day.activities) == before:
+                raise AIError("activity_not_in_day", 422)
+            summary = (
+                f"{place.name} {target_date.isoformat()} gününden çıkarıldı."
+                if record.request.language == "tr"
+                else f"Removed {place.name} from {target_date.isoformat()}."
+            )
+            instruction = f"remove:{target_date.isoformat()}:{place_id}"
+        else:
+            if any(item.place.id == place_id for item in day.activities):
+                raise AIError("activity_already_in_day", 422)
+            if len(day.activities) >= 3:
+                raise AIError("activity_day_full", 422)
+            occupied = {item.period for item in day.activities}
+            selected_period = period or next(
+                (item for item in PERIODS if item not in occupied), None
+            )
+            if selected_period is None or selected_period in occupied:
+                raise AIError("activity_period_unavailable", 422)
+            reason = (
+                "Kullanıcı tarafından doğrulanmış adaylar arasından plana eklendi."
+                if record.request.language == "tr"
+                else "Added by the user from verified candidates."
+            )
+            day.activities.append(
+                ItineraryActivity(period=selected_period, place=place, reason=reason)
+            )
+            day.activities.sort(key=lambda item: PERIODS.index(item.period))
+            summary = (
+                f"{place.name} {target_date.isoformat()} gününe eklendi."
+                if record.request.language == "tr"
+                else f"Added {place.name} to {target_date.isoformat()}."
+            )
+            instruction = f"add:{target_date.isoformat()}:{place_id}"
+        record.version += 1
+        record.updated_at = utc_now()
+        record.revisions.append(
+            RevisionEntry(
+                instruction=instruction,
+                result_summary=summary,
+                version=record.version,
+                created_at=record.updated_at,
             )
         )
         stored.revision_instructions.append(instruction)

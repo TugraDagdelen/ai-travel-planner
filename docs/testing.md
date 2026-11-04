@@ -1,14 +1,14 @@
 # Executed verification — Phase 6
 
-Session: 2026-10-29–2026-11-01, Windows. Node 24.12.0 / npm 11.6.2 / Python 3.13.0.
+Session: 2026-10-29–2026-11-05, Windows. Node 24.12.0 / npm 11.6.2 / Python 3.13.0.
 
 | Check | Result |
 |---|---|
 | Repository `python scripts/check_repository.py` | Passed; no local DB/environment files or recognizable credentials tracked |
-| Backend `python -m pytest -q -p no:cacheprovider` | **85 passed** |
+| Backend `python -m pytest -q -p no:cacheprovider` | **87 passed** |
 | Backend `python -m ruff check app tests` | Passed |
 | Backend `python -m pip check` | No broken requirements |
-| Frontend `npm test` | **27 passed**, 8 files |
+| Frontend `npm test` | **28 passed**, 8 files |
 | Frontend `npm run typecheck` | Passed |
 | Frontend `npm run lint` | Passed |
 | Frontend `npm run build` | TypeScript and production build passed |
@@ -21,6 +21,7 @@ Session: 2026-10-29–2026-11-01, Windows. Node 24.12.0 / npm 11.6.2 / Python 3.
 | Live food-aware itinerary | **Passed 2026-11-01:** a two-day deterministic Paris plan contained one visit and one verified restaurant on each day |
 | City-wide Paris ranking | **Passed 2026-11-02:** nine-zone 10 km search returned 40 balanced results spanning 6 km; Eiffel Tower, Catacombs of Paris, Musée Rodin, Musée Marmottan Monet, parks and 11 restaurants survived ranking. A two-day culture-and-food plan selected the Catacombs and Eiffel Tower on separate days with one restaurant per day |
 | City-wide Tekirdağ coverage | **Passed 2026-11-05:** automatic 20 km search returned 17 real records instead of 2: 10 restaurants, 3 historic sites, 3 museums and 1 park. Turkish names were preserved, Wikipedia/Wikidata and OpenStreetMap/Nominatim records were merged, and the complete response was ordered from 188 m to 17.7 km from the city center |
+| City-wide Yalova coverage | **Passed 2026-11-05:** automatic 25 km search returned 27 real records and included Termal, Yalova at 10.3 km and Sudüşen Şelalesi at 14 km. A two-day proximity plan grouped Termal with Yalova Atatürk Köşkü and kept the central museums together on the second day |
 | Gemini SDK live request | **Passed 2026-11-01:** operator-confirmed Free Tier key returned `connected` with `gemini-3.5-flash-lite`; key remained local and ignored |
 | Complete live AI itinerary | **Passed in Docker:** two-day Paris culture-and-food plan used Open-Meteo plus Wikimedia/Wikidata evidence and Gemini tool calling; each day contained two visits and one restaurant, with six non-repeated real places total |
 | Browser AI status | Missing-key state shown from real FastAPI response; Turkish/English copy verified |
@@ -28,7 +29,7 @@ Session: 2026-10-29–2026-11-01, Windows. Node 24.12.0 / npm 11.6.2 / Python 3.
 | Responsive QA | Desktop and 390 × 844 saved-trip views inspected; no horizontal overflow and no console warnings/errors |
 | Portfolio screenshots | Real local home, saved-trip list, desktop detail and mobile detail captured under `docs/screenshots` |
 | Render production path | Blueprint parsed; `/api` frontend build passed; FastAPI asset, SPA fallback, and unknown-API behavior passed |
-| Docker production path | Multi-stage image built; Compose health `ok`, home `200`, SPA title present, named SQLite volume active, and Gemini returned `connected` from the container |
+| Docker production path | Multi-stage image built; Compose health `ok`, home `200`, SPA title present, named SQLite volume active, runtime `backend/.env` was loaded without embedding it in the image, and Gemini returned `connected` from the container |
 | Clean-source setup | Source-only archive extracted separately; `npm ci` and Python locked dependency installation completed, then full checks passed |
 
 ## Coverage
