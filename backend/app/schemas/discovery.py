@@ -24,6 +24,7 @@ class Destination(BaseModel):
     latitude: float = Field(ge=-90, le=90)
     longitude: float = Field(ge=-180, le=180)
     timezone: str
+    population: int | None = Field(default=None, ge=0)
     source_url: str | None = None
 
 
@@ -73,7 +74,7 @@ class PlacesResponse(BaseModel):
     destination_id: str
     places: list[Place]
     radius_m: int
-    result_limit: int = 40
+    result_limit: int = 100
     truncated: bool = False
     skipped_records: int = 0
     metadata: SourceMetadata

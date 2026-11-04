@@ -187,12 +187,16 @@ def test_osm_parsing_provenance_deduplication_and_missing_coordinates(harness):
     assert by_id["osm:way:3"]["classification_basis"] == "category_inference"
     assert by_id["osm:relation:4"]["latitude"] is None
     assert by_id["osm:way:7"]["coordinate_kind"] == "unknown"
-    assert result["skipped_records"] == 2
+    assert result["skipped_records"] == 3
     assert result["metadata"]["source"] == "© OpenStreetMap contributors"
-    query = parse_qs(calls[-1].content.decode())["data"][0]
-    assert '["tourism"="museum"]' in query
-    assert "out center 120" in query
-    assert "around:10000" in query
+    queries = [
+        parse_qs(call.content.decode())["data"][0]
+        for call in calls
+        if "overpass" in call.url.host
+    ]
+    assert any('["tourism"="museum"]' in query for query in queries)
+    assert all("out center 30" in query for query in queries)
+    assert all("around:" not in query for query in queries)
 
 
 def test_dense_categories_use_bounded_overpass_filters(harness):
@@ -203,11 +207,15 @@ def test_dense_categories_use_bounded_overpass_filters(harness):
         params={"destination_id": identifier, "categories": ["historic", "restaurant"]},
     )
     assert response.status_code == 200
-    query = parse_qs(calls[-1].content.decode())["data"][0]
-    assert 'node(around:10000' in query
-    assert '["historic"]' not in query
-    assert 'monument|memorial|castle' in query
-    assert "maxsize:4194304" in query
+    queries = [
+        parse_qs(call.content.decode())["data"][0]
+        for call in calls
+        if "overpass" in call.url.host
+    ]
+    assert any("node(" in query for query in queries)
+    assert all('["historic"]' not in query for query in queries)
+    assert any("monument|memorial|castle" in query for query in queries)
+    assert all("maxsize:2097152" in query for query in queries)
 
 
 def test_wikimedia_places_are_real_typed_and_attributed():
@@ -282,6 +290,10 @@ def test_wikimedia_places_are_real_typed_and_attributed():
                     }
                 },
             )
+        if request.url.host == "overpass-api.de":
+            return httpx.Response(200, json={"elements": []})
+        if request.url.host == "nominatim.openstreetmap.org":
+            return httpx.Response(200, json=[])
         raise AssertionError(f"unexpected provider: {request.url.host}")
 
     settings = Settings(
@@ -297,6 +309,7 @@ def test_wikimedia_places_are_real_typed_and_attributed():
             params={
                 "destination_id": identifier,
                 "categories": ["museum", "restaurant"],
+                "language": "en",
             },
         )
     assert result.status_code == 200
@@ -326,6 +339,8 @@ def test_wikimedia_places_are_real_typed_and_attributed():
         "query.wikidata.org",
         "en.wikipedia.org",
         "en.wikipedia.org",
+        "nominatim.openstreetmap.org",
+        "nominatim.openstreetmap.org",
     ]
 
 
@@ -337,7 +352,7 @@ def test_empty_and_truncated_places_are_explicit(harness):
         "/api/places", params={"destination_id": identifier, "categories": "museum"}
     )
     assert response.json()["places"] == []
-    elements = [fixture("places.json")["elements"][0]] * 120
+    elements = [fixture("places.json")["elements"][0]] * 150
     responses["overpass-api.de"] = {"elements": elements}
     response = client.get(
         "/api/places",
@@ -403,9 +418,10 @@ def test_overpass_rate_limit_does_not_rotate(harness):
     "params",
     [
         {"categories": "raw_query"},
-        {"categories": "museum", "radius_m": 10001},
+        {"categories": "museum", "radius_m": 25001},
         {"categories": "museum", "radius_m": -1},
         {"categories": "museum", "mode": "paid"},
+        {"categories": "museum", "language": "de"},
     ],
 )
 def test_invalid_place_queries_make_no_provider_calls(harness, params):

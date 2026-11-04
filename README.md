@@ -29,7 +29,7 @@ Rota demonstrates how to build a transparent full-stack AI product without hidin
 - Backend-validated preference summary; data stays in React memory while navigating and resets on refresh.
 - Explicit city selection, optional country filtering and ambiguous-city handling.
 - Date-aligned weather, local time zones, missing values and forecast-window handling.
-- City-wide place discovery scans nine overlapping center, inner-ring and outer-ring zones across a 10 km radius, then compares Wikimedia/Wikidata candidates using article descriptions, thumbnails, 30-day Wikipedia interest, category balance, distance and coordinate/classification quality; Overpass remains a fallback.
+- City-wide place discovery automatically uses a 15–25 km radius based on city population. Turkish Wikipedia records are preferred, sparse coverage is supplemented from English Wikipedia and OpenStreetMap/Nominatim, and up to 100 results across all five categories are sorted by distance from the city center.
 - Independent loading/error/retry states, cached response labels, request limits and an explicit offline demo.
 - Opt-in Gemini status and connection checks with no automatic model, paid-tier or grounding fallback.
 - Bounded manual Gemini function-calling loop with an allowlisted weather/place tool registry.
@@ -123,7 +123,7 @@ The UI also works at `http://localhost:5173`, which is an allowed CORS origin. A
 | POST | `/api/trip-requests/validate` | Validates/normalizes preferences without saving or generating |
 | GET | `/api/destinations` | Candidates: `q`, optional `country_code`, `language`, `mode` |
 | GET | `/api/weather` | Daily weather: `destination_id`, `start_date`, `end_date`, `mode` |
-| GET | `/api/places` | Places: `destination_id`, repeated `categories`, optional `radius_m`, `mode` |
+| GET | `/api/places` | Places: `destination_id`, repeated `categories`, optional `radius_m` (250–25000), `language`, `mode` |
 | GET | `/api/ai/status` | Safe configuration/capability state; never calls Gemini |
 | POST | `/api/ai/check` | One bounded structured Gemini connection test; body contains only `language` |
 | POST | `/api/research` | Structured unavailable result for gated Maps/Search research |
@@ -226,7 +226,7 @@ Do not expose the development servers publicly. No billing is configured, no pai
 
 ## Attribution and data use
 
-Live city and weather data come from Open-Meteo under its published terms. Place discovery uses coordinate-backed Wikipedia pages classified through Wikidata, enriched with article extracts, thumbnails and 30-day pageviews, with contributor attribution; the data is available under the sources' respective licenses. Pageviews are labelled as an interest signal, never a rating. Overpass is retained as a bounded fallback. Map tiles remain attributed to © OpenStreetMap contributors. Google Maps URLs are ordinary keyless view/navigation links, not Places or grounding API calls. Google ratings are neither fetched nor sorted because the official Places API requires billing. Provider responses may be incomplete and remain subject to provider quotas, retention terms and licenses.
+Live city and weather data come from Open-Meteo under its published terms. Place discovery uses coordinate-backed Wikipedia pages classified through Wikidata, enriched with article extracts, thumbnails and 30-day pageviews. OpenStreetMap/Nominatim adds city-wide restaurants, parks and other named places; bounded Overpass queries remain a fallback. Pageviews are labelled as an interest signal, never a rating. Map tiles remain attributed to © OpenStreetMap contributors. Google Maps URLs are ordinary keyless view/navigation links, not Places or grounding API calls. Google ratings are neither fetched nor sorted because the official Places API requires billing. Provider responses may be incomplete and remain subject to provider quotas, retention terms and licenses.
 
 ## Reproducible verification
 

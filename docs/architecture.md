@@ -8,7 +8,7 @@ flowchart LR
     Service --> Gateway[Bounded HTTPX gateway and cache]
     Gateway --> Meteo[Open-Meteo city and forecast]
     Gateway --> Wiki[Wikipedia geosearch + Wikidata types]
-    Gateway --> OSM[OSM Overpass fallback]
+    Gateway --> OSM[OSM Nominatim + Overpass fallback]
     UI -->|Explicit status/check| AIAPI[AI routes]
     AIAPI --> Gate[Free-only model and account gates]
     Gate -->|One structured check| Gemini[Gemini Developer API]
@@ -35,9 +35,9 @@ Search `/api/destinations?q=Paris&language=en&mode=live`, optionally `country_co
 
 `/api/weather` requires start/end dates (1–14 inclusive days). Only the intersection with today through today + 15 in the destination time zone is fetched. Returned days preserve the original dates. Missing values are null; unavailable days use `missing_data` or `outside_forecast_horizon`. No different-date forecast or historic weather is substituted. Units: °C, mm, percent. Status: ok/partial/unavailable.
 
-`/api/places` requires 1–5 repeated `categories`: museum/historic/park/attraction/restaurant. Radius: 250–10000 metres (UI: 10000). For city-wide searches, the primary path scans nine overlapping zones at the center plus inner and outer cardinal directions, deduplicates up to 900 primary-coordinate Wikipedia pages, and classifies requested types through bounded 200-item Wikidata queries. Popularity is fetched for up to 300 balanced candidates before the strongest 40 receive full descriptions and thumbnails. If Wikimedia fails, a bounded Overpass query provides an independent real-data fallback. Truncation and omitted records are explicit. UI interests map culture → historic/museum/attraction, art → museum, nature → park/attraction, food → restaurant.
+`/api/places` requires 1–5 repeated `categories`: museum/historic/park/attraction/restaurant. Radius is 250–25000 metres; when omitted the service chooses 15, 20 or 25 km from the destination population. The primary path scans nine overlapping Wikipedia zones, deduplicates up to 900 coordinate-backed pages, and classifies requested types through bounded Wikidata queries. Turkish Wikipedia is preferred and English Wikipedia supplements sparse coverage. Nominatim adds named OpenStreetMap places across every category; bounded per-category Overpass queries provide an independent fallback. The UI requests all five categories and returns up to 100 entries sorted by distance from the city center. Truncation and omitted records are explicit.
 
-Places retain stable Wikidata or OSM IDs and record links. Wikipedia-backed results add a short article extract, thumbnail, direct article URL and a summed 30-day pageview count. Requested categories are interleaved so a dense museum category cannot hide restaurants; entries within each category prefer higher pageviews and then proximity. Pageviews are presented as public interest, never as a rating. Known coordinates beyond the radius are omitted. OSM fallback records preserve missing-coordinate and geometry-center caveats. Distances are straight-line. Indoor/outdoor evidence distinguishes provider tags, category inference and unknown. No invented prices, ratings, hours or walking times.
+Places retain stable Wikidata or OSM IDs and record links. Wikipedia-backed results add a short article extract, thumbnail, direct article URL and a summed 30-day pageview count. Candidate selection preserves category variety before the final response is sorted from nearest to farthest. Pageviews are presented as public interest, never as a rating. Known coordinates beyond the radius are omitted. OSM records preserve geometry-center caveats and Nominatim display names provide address context. Distances are straight-line. Indoor/outdoor evidence distinguishes provider tags, category inference and unknown. No invented prices, ratings, hours or walking times.
 
 Metadata includes mode, source/link, fetched timestamp and cache status. No-fetch weather has no timestamp; demo has no external source link. HTTP 422 indicates input errors, 409 expired/unknown city, 429 limits and 503 provider failures. Safe errors do not echo notes or credentials; Retry-After is forwarded where applicable.
 
@@ -57,8 +57,8 @@ The official SDK is forced to the Gemini Developer API host and a fixed model ID
 |---|---|
 | Request deadline | 25 seconds, including queue/rate-limit waits |
 | Response limit | 2 MB; no redirects |
-| Concurrency | One request per provider group: Meteo, Wikimedia or Overpass |
-| Minimum spacing | Meteo/Wikimedia 1 second; Overpass 3 seconds |
+| Concurrency | One request per provider group: Meteo, Wikimedia, Nominatim or Overpass |
+| Minimum spacing | Meteo/Wikimedia/Nominatim 1 second; Overpass 3 seconds |
 | Call budget | 120/hour and 600/day per group/process; retries count |
 | Retry | At most once for 502/503/504 with short wait; none for 429 |
 | Cooldown | Retry-After respected; no endpoint/key rotation |

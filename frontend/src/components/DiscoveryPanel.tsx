@@ -10,7 +10,7 @@ import type { Language, TripRequest } from '../types/trip'
 
 interface Remote<T> { loading: boolean; data: T | null; error: DataError | null }
 const empty = <T,>(): Remote<T> => ({ loading: false, data: null, error: null })
-const categoriesFor: Record<string, Category[]> = { culture: ['historic', 'museum', 'attraction'], art: ['museum'], nature: ['park', 'attraction'], food: ['restaurant'] }
+const allCategories: Category[] = ['historic', 'museum', 'attraction', 'park', 'restaurant']
 
 function Source({ metadata, t, language }: { metadata: SourceMetadata; t: DiscoveryCopy; language: Language }) {
   return <div className="source-line">
@@ -51,7 +51,7 @@ export function DiscoveryPanel({ request, language, onSelectionChange }: { reque
   const [switchingDemo, setSwitchingDemo] = useState(false)
   const controllers = useRef<Partial<Record<'search' | 'weather' | 'places', AbortController>>>({})
   const epoch = useRef(0)
-  const categories = [...new Set(request.interests.flatMap(interest => categoriesFor[interest]))]
+  const categories = allCategories
 
   useEffect(() => {
     const active = controllers.current
@@ -102,7 +102,7 @@ export function DiscoveryPanel({ request, language, onSelectionChange }: { reque
     const controller = controllerFor('places')
     setPlaces({ loading: true, data: null, error: null })
     try {
-      const data = await fetchPlaces(destination.id, categories, dataMode, controller.signal)
+      const data = await fetchPlaces(destination.id, categories, language, dataMode, controller.signal)
       if (!controller.signal.aborted) setPlaces({ loading: false, data, error: null })
     } catch (error) {
       if (!controller.signal.aborted) setPlaces({ loading: false, data: null, error: dataError(error) })

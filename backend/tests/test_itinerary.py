@@ -281,5 +281,8 @@ def test_ai_loop_dispatches_declared_tools_and_validates_actual_results():
         "geocoding-api.open-meteo.com",
         "api.open-meteo.com",
         "overpass-api.de",
+        "overpass-api.de",
+        "overpass-api.de",
+        "overpass-api.de",
     ]
     assert result.json()["days"][0]["activities"][0]["place"]["name"] == "Fixture Museum"

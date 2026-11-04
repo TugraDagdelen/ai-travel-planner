@@ -50,7 +50,7 @@ class PlacesArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
     destination_id: str
     categories: list[Category] = Field(min_length=1, max_length=5)
-    radius_m: int = Field(default=10000, ge=250, le=10000)
+    radius_m: int = Field(default=20000, ge=250, le=25000)
 
 
 TOOL_DECLARATIONS = [
@@ -114,7 +114,7 @@ class ToolRegistry:
                 args = PlacesArgs(
                     destination_id=self.body.destination_id,
                     categories=self.categories,
-                    radius_m=10000,
+                    radius_m=self.discovery.city_radius(self.destination),
                 )
                 requested = args.categories
                 key = f"places:{args.model_dump_json()}"
@@ -171,7 +171,7 @@ class ToolRegistry:
             {
                 "destination_id": self.body.destination_id,
                 "categories": self.categories,
-                "radius_m": 10000,
+                "radius_m": self.discovery.city_radius(self.destination),
             },
         )
 

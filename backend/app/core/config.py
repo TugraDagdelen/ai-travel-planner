@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     agent_max_tool_calls: int = Field(default=6, ge=2, le=10)
     agent_timeout_seconds: float = Field(default=75, ge=10, le=120)
     max_trip_days: int = Field(default=14, ge=1, le=14)
-    provider_timeout_seconds: float = Field(default=25, ge=1, le=45)
+    provider_timeout_seconds: float = Field(default=45, ge=1, le=45)
     provider_hourly_limit: int = Field(default=120, ge=1, le=500)
     provider_daily_limit: int = Field(default=600, ge=1, le=2000)
     meteo_min_interval_seconds: float = Field(default=1, ge=0, le=10)

@@ -50,6 +50,7 @@ describe('real data discovery', () => {
     await user.click(screen.getByRole('button', { name: /Paris Île-de-France/ }))
     expect(await screen.findByText('Fixture Museum')).toBeInTheDocument()
     expect(fetchWeather).toHaveBeenCalledWith('geonames:1', '2027-02-01', '2027-02-02', 'live', expect.any(AbortSignal))
+    expect(fetchPlaces).toHaveBeenCalledWith('geonames:1', ['historic', 'museum', 'attraction', 'park', 'restaurant'], 'en', 'live', expect.any(AbortSignal))
     expect(screen.getByText('No forecast is available for this date.')).toBeInTheDocument()
     expect(screen.getByText('No verifiable coordinates')).toBeInTheDocument()
     expect(screen.getByText(/Inferred from category/)).toBeInTheDocument()

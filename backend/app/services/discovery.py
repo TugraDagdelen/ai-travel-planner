@@ -1,3 +1,4 @@
+import asyncio
 import math
 import time
 import unicodedata
@@ -86,6 +87,18 @@ class DiscoveryService:
         return record[1]
 
     @staticmethod
+    def city_radius(destination: Destination) -> int:
+        """Choose a broad city-scale radius when no administrative boundary is available."""
+        population = destination.population
+        if population is None:
+            return 20_000
+        if population < 100_000:
+            return 15_000
+        if population < 1_000_000:
+            return 20_000
+        return 25_000
+
+    @staticmethod
     def metadata(mode: Mode, source: str, url: str, payload=None) -> SourceMetadata:
         return SourceMetadata(
             mode=mode,
@@ -134,6 +147,12 @@ class DiscoveryService:
                         latitude=item["latitude"],
                         longitude=item["longitude"],
                         timezone=item["timezone"],
+                        population=(
+                            int(item["population"])
+                            if type(item.get("population")) in (int, float)
+                            and item["population"] >= 0
+                            else None
+                        ),
                         source_url=f"https://www.geonames.org/{identifier}",
                     )
                     if not country_code or destination.country_code == country_code:
@@ -239,7 +258,12 @@ class DiscoveryService:
             raise ProviderError("provider_invalid_response", "forecast", False) from exc
 
     async def places(
-        self, destination: Destination, categories: list[Category], radius: int, mode: Mode
+        self,
+        destination: Destination,
+        categories: list[Category],
+        radius: int,
+        mode: Mode,
+        language: str = "tr",
     ):
         categories = sorted(set(categories))
         if mode == "demo":
@@ -266,31 +290,300 @@ class DiscoveryService:
             )
         if self.gateway.settings.places_provider == "wikimedia":
             try:
-                return await self.wikimedia_places(destination, categories, radius, mode)
+                wikimedia = await self.wikimedia_places(
+                    destination, categories, radius, mode, language
+                )
             except ProviderError:
                 # Keep one independent real-data fallback. Demo data is never mixed in.
                 return await self.overpass_places(destination, categories, radius, mode)
+            try:
+                osm = await self.nominatim_places(
+                    destination, categories, radius, mode, language
+                )
+            except ProviderError:
+                try:
+                    osm = await self.overpass_places(destination, categories, radius, mode)
+                except ProviderError:
+                    return wikimedia
+            if not osm.places:
+                return wikimedia
+            combined = list(wikimedia.places)
+            for candidate in osm.places:
+                duplicate = any(
+                    normalized(place.name) == normalized(candidate.name)
+                    and place.category == candidate.category
+                    and (
+                        place.latitude is None
+                        or place.longitude is None
+                        or candidate.latitude is None
+                        or candidate.longitude is None
+                        or distance(
+                            place.latitude,
+                            place.longitude,
+                            candidate.latitude,
+                            candidate.longitude,
+                        )
+                        < 150
+                    )
+                    for place in combined
+                )
+                if not duplicate:
+                    combined.append(candidate)
+            combined.sort(
+                key=lambda place: (
+                    place.distance_m if place.distance_m is not None else 10**9,
+                    place.name.casefold(),
+                )
+            )
+            source = (
+                "Wikipedia, Wikidata ve OpenStreetMap"
+                if language == "tr"
+                else "Wikipedia, Wikidata and OpenStreetMap"
+            )
+            return wikimedia.model_copy(
+                update={
+                    "places": combined[:100],
+                    "truncated": wikimedia.truncated
+                    or osm.truncated
+                    or len(combined) > 100,
+                    "skipped_records": wikimedia.skipped_records + osm.skipped_records,
+                    "metadata": wikimedia.metadata.model_copy(
+                        update={
+                            "source": source,
+                            "source_url": "https://www.openstreetmap.org/copyright",
+                        }
+                    ),
+                }
+            )
         return await self.overpass_places(destination, categories, radius, mode)
+
+    async def nominatim_places(
+        self,
+        destination: Destination,
+        categories: list[Category],
+        radius: int,
+        mode: Mode,
+        language: str,
+    ) -> PlacesResponse:
+        terms = {
+            "tr": {
+                "museum": "müze",
+                "historic": "tarihi yer",
+                "park": "park",
+                "attraction": "turistik yer",
+                "restaurant": "restoran",
+            },
+            "en": {
+                "museum": "museum",
+                "historic": "historic site",
+                "park": "park",
+                "attraction": "tourist attraction",
+                "restaurant": "restaurant",
+            },
+        }[language]
+        latitude_delta = radius / 111_320
+        longitude_scale = max(0.2, math.cos(math.radians(destination.latitude)))
+        longitude_delta = radius / (111_320 * longitude_scale)
+        viewbox = ",".join(
+            f"{value:.6f}"
+            for value in (
+                destination.longitude - longitude_delta,
+                destination.latitude + latitude_delta,
+                destination.longitude + longitude_delta,
+                destination.latitude - latitude_delta,
+            )
+        )
+        allowed_types = {
+            "museum": {("tourism", "museum")},
+            "historic": {
+                ("historic", item)
+                for item in (
+                    "archaeological_site",
+                    "castle",
+                    "city_gate",
+                    "fort",
+                    "manor",
+                    "memorial",
+                    "monument",
+                    "palace",
+                    "ruins",
+                )
+            },
+            "park": {("leisure", "park"), ("leisure", "garden")},
+            "attraction": {
+                ("tourism", "attraction"),
+                ("tourism", "viewpoint"),
+                ("tourism", "theme_park"),
+            },
+            "restaurant": {("amenity", "restaurant")},
+        }
+        places: list[Place] = []
+        skipped = 0
+        payloads = []
+        last_error: ProviderError | None = None
+        for category in categories:
+            try:
+                payload = await self.gateway.request(
+                    "nominatim_search",
+                    {
+                        "q": f"{terms[category]} {destination.name}",
+                        "format": "jsonv2",
+                        "limit": 30,
+                        "addressdetails": 1,
+                        "extratags": 1,
+                        "namedetails": 1,
+                        "accept-language": language,
+                        "viewbox": viewbox,
+                        "bounded": 1,
+                    },
+                    ttl=86400,
+                )
+            except ProviderError as exc:
+                last_error = exc
+                continue
+            payloads.append(payload)
+            records = payload.data.get("results", [])
+            if not isinstance(records, list):
+                skipped += 1
+                continue
+            for record in records:
+                try:
+                    source_type = (record["category"], record["type"])
+                    if source_type not in allowed_types[category]:
+                        continue
+                    kind = record["osm_type"]
+                    identifier = int(record["osm_id"])
+                    if kind not in {"node", "way", "relation"} or identifier <= 0:
+                        raise ValueError("invalid OSM identity")
+                    namedetails = record.get("namedetails", {})
+                    name = (
+                        namedetails.get(f"name:{language}")
+                        or record.get("name")
+                        or namedetails.get("name")
+                    )
+                    if not isinstance(name, str) or not name.strip():
+                        raise ValueError("missing place name")
+                    lat, lon = float(record["lat"]), float(record["lon"])
+                    meters = distance(
+                        destination.latitude, destination.longitude, lat, lon
+                    )
+                    if meters > radius:
+                        continue
+                    identity = f"osm:{kind}:{identifier}"
+                    if any(place.id == identity for place in places):
+                        continue
+                    display_name = record.get("display_name")
+                    places.append(
+                        Place(
+                            id=identity,
+                            name=name.strip()[:200],
+                            category=category,
+                            latitude=lat,
+                            longitude=lon,
+                            coordinate_kind=(
+                                "node" if kind == "node" else "geometry_center"
+                            ),
+                            distance_m=meters,
+                            indoor=(
+                                "indoor"
+                                if category == "museum"
+                                else (
+                                    "outdoor"
+                                    if category in {"park", "attraction"}
+                                    else "unknown"
+                                )
+                            ),
+                            classification_basis="osm_tag",
+                            source_url=f"https://www.openstreetmap.org/{kind}/{identifier}",
+                            description=(
+                                display_name.strip()[:600]
+                                if isinstance(display_name, str)
+                                else None
+                            ),
+                            tags={"osm_category": source_type[0], "osm_type": source_type[1]},
+                        )
+                    )
+                except (KeyError, TypeError, ValueError, AttributeError):
+                    skipped += 1
+        if not payloads:
+            if last_error is not None:
+                raise last_error
+            raise ProviderError("provider_unavailable", "nominatim")
+        places.sort(
+            key=lambda place: (
+                place.distance_m if place.distance_m is not None else 10**9,
+                place.name.casefold(),
+            )
+        )
+        return PlacesResponse(
+            destination_id=destination.id,
+            places=places[:100],
+            radius_m=radius,
+            truncated=any(len(item.data.get("results", [])) >= 30 for item in payloads)
+            or len(places) > 100,
+            skipped_records=skipped,
+            metadata=self.metadata(
+                mode,
+                "© OpenStreetMap contributors",
+                "https://www.openstreetmap.org/copyright",
+                payloads[-1],
+            ),
+        )
 
     async def overpass_places(
         self, destination: Destination, categories: list[Category], radius: int, mode: Mode
     ):
-        filters = "".join(
-            f"{CATEGORY_FILTERS[category][0]}(around:{radius},{destination.latitude},"
-            f'{destination.longitude}){CATEGORY_FILTERS[category][1]}["name"];'
-            for category in categories
+        elements = []
+        payloads = []
+        last_error: ProviderError | None = None
+        category_order = ["museum", "historic", "park", "attraction", "restaurant"]
+        latitude_delta = radius / 111_320
+        longitude_scale = max(0.2, math.cos(math.radians(destination.latitude)))
+        longitude_delta = radius / (111_320 * longitude_scale)
+        bounds = (
+            destination.latitude - latitude_delta,
+            destination.longitude - longitude_delta,
+            destination.latitude + latitude_delta,
+            destination.longitude + longitude_delta,
         )
-        query = f"[out:json][timeout:12][maxsize:4194304];({filters});out center 120;"
-        payload = await self.gateway.request("overpass", {"data": query}, ttl=3600)
-        elements = payload.data.get("elements")
-        if not isinstance(elements, list):
-            raise ProviderError("provider_invalid_response", "overpass", False)
-        places, skipped = self.parse_places(elements[:120], destination, categories, radius)
+        bbox = ",".join(f"{value:.6f}" for value in bounds)
+        for category in (item for item in category_order if item in categories):
+            query = (
+                "[out:json][timeout:15][maxsize:2097152];"
+                f"{CATEGORY_FILTERS[category][0]}({bbox})"
+                f'{CATEGORY_FILTERS[category][1]}["name"];'
+                "out center 30;"
+            )
+            try:
+                async with asyncio.timeout(12):
+                    payload = await self.gateway.request(
+                        "overpass", {"data": query}, ttl=3600
+                    )
+            except ProviderError as exc:
+                last_error = exc
+                continue
+            except TimeoutError:
+                last_error = ProviderError("provider_timeout", "overpass")
+                continue
+            batch = payload.data.get("elements")
+            if not isinstance(batch, list):
+                last_error = ProviderError("provider_invalid_response", "overpass", False)
+                continue
+            payloads.append(payload)
+            elements.extend(batch)
+        if not payloads:
+            if last_error is not None:
+                raise last_error
+            raise ProviderError("provider_unavailable", "overpass")
+        payload = payloads[-1]
+        places, skipped = self.parse_places(elements[:150], destination, categories, radius)
         return PlacesResponse(
             destination_id=destination.id,
-            places=places[:40],
+            places=places[:100],
             radius_m=radius,
-            truncated=len(elements) >= 120 or len(places) > 40,
+            truncated=any(len(item.data.get("elements", [])) >= 30 for item in payloads)
+            or len(elements) >= 150
+            or len(places) > 100,
             skipped_records=skipped,
             metadata=self.metadata(
                 mode,
@@ -301,8 +594,18 @@ class DiscoveryService:
         )
 
     async def wikimedia_places(
-        self, destination: Destination, categories: list[Category], radius: int, mode: Mode
+        self,
+        destination: Destination,
+        categories: list[Category],
+        radius: int,
+        mode: Mode,
+        language: str = "tr",
+        allow_supplement: bool = True,
     ):
+        wikipedia_geo = "wikipedia_geo_tr" if language == "tr" else "wikipedia_geo"
+        wikipedia_details = (
+            "wikipedia_details_tr" if language == "tr" else "wikipedia_details"
+        )
         anchors = [(destination.latitude, destination.longitude)]
         scan_radius = radius
         if radius > 5000:
@@ -324,30 +627,40 @@ class DiscoveryService:
         geo_payloads = []
         pages = []
         scan_truncated = False
+        geo_error: ProviderError | None = None
         for latitude, longitude in anchors:
-            geo = await self.gateway.request(
-                "wikipedia_geo",
-                {
-                    "action": "query",
-                    "generator": "geosearch",
-                    "ggsprimary": "primary",
-                    "ggsnamespace": 0,
-                    "ggsradius": scan_radius,
-                    "ggscoord": f"{latitude}|{longitude}",
-                    "ggslimit": 100,
-                    "prop": "coordinates|pageprops",
-                    "colimit": "max",
-                    "format": "json",
-                    "formatversion": 2,
-                },
-                ttl=86400,
-            )
+            try:
+                geo = await self.gateway.request(
+                    wikipedia_geo,
+                    {
+                        "action": "query",
+                        "generator": "geosearch",
+                        "ggsprimary": "primary",
+                        "ggsnamespace": 0,
+                        "ggsradius": scan_radius,
+                        "ggscoord": f"{latitude}|{longitude}",
+                        "ggslimit": 100,
+                        "prop": "coordinates|pageprops",
+                        "colimit": "max",
+                        "format": "json",
+                        "formatversion": 2,
+                    },
+                    ttl=86400,
+                )
+            except ProviderError as exc:
+                # One temporarily busy scan cell must not discard the other city zones.
+                geo_error = exc
+                continue
             geo_payloads.append(geo)
             batch = geo.data.get("query", {}).get("pages", [])
             if not isinstance(batch, list):
                 raise ProviderError("provider_invalid_response", "wikimedia", False)
             pages.extend(batch)
             scan_truncated = scan_truncated or len(batch) >= 100
+        if not geo_payloads:
+            if geo_error is not None:
+                raise geo_error
+            raise ProviderError("provider_unavailable", "wikimedia")
         geo = geo_payloads[0]
         candidates: dict[str, tuple[int, str, float, float]] = {}
         skipped = 0
@@ -372,7 +685,7 @@ class DiscoveryService:
             except (KeyError, IndexError, TypeError, ValueError, AttributeError):
                 skipped += 1
         if not candidates:
-            return PlacesResponse(
+            empty_response = PlacesResponse(
                 destination_id=destination.id,
                 places=[],
                 radius_m=radius,
@@ -384,6 +697,26 @@ class DiscoveryService:
                     geo,
                 ),
             )
+            if language == "tr" and allow_supplement:
+                try:
+                    english = await self.wikimedia_places(
+                        destination,
+                        categories,
+                        radius,
+                        mode,
+                        "en",
+                        allow_supplement=False,
+                    )
+                except ProviderError:
+                    return empty_response
+                return english.model_copy(
+                    update={
+                        "metadata": english.metadata.model_copy(
+                            update={"source": "İngilizce Wikipedia ile Wikidata"}
+                        )
+                    }
+                )
+            return empty_response
         roots = {WIKIDATA_ROOTS[category]: category for category in categories}
         root_values = " ".join(f"wd:{qid}" for qid in roots)
         bindings = []
@@ -467,7 +800,7 @@ class DiscoveryService:
                 page_ids = list(by_page_id)
                 for start in range(0, len(page_ids), 50):
                     popularity = await self.gateway.request(
-                        "wikipedia_details",
+                        wikipedia_details,
                         {
                             "action": "query",
                             "pageids": "|".join(str(item) for item in page_ids[start : start + 50]),
@@ -507,9 +840,9 @@ class DiscoveryService:
                 )
             )
         places = []
-        while any(grouped.values()) and len(places) < 40:
+        while any(grouped.values()) and len(places) < 100:
             for category in categories:
-                if grouped[category] and len(places) < 40:
+                if grouped[category] and len(places) < 100:
                     places.append(grouped[category].pop(0))
 
         if places:
@@ -517,28 +850,34 @@ class DiscoveryService:
                 by_page_id = {
                     candidates[place.id.split(":", 1)[1]][0]: place for place in places
                 }
-                details = await self.gateway.request(
-                    "wikipedia_details",
-                    {
-                        "action": "query",
-                        "pageids": "|".join(str(item) for item in by_page_id),
-                        "prop": "extracts|pageimages|info",
-                        "inprop": "url",
-                        "exintro": 1,
-                        "explaintext": 1,
-                        "exsentences": 2,
-                        "exlimit": "max",
-                        "piprop": "thumbnail",
-                        "pithumbsize": 480,
-                        "pilimit": "max",
-                        "format": "json",
-                        "formatversion": 2,
-                    },
-                    ttl=21600,
-                )
-                detail_pages = details.data.get("query", {}).get("pages", [])
-                if not isinstance(detail_pages, list):
-                    raise ValueError("invalid Wikipedia details")
+                detail_pages = []
+                page_ids = list(by_page_id)
+                for start in range(0, len(page_ids), 50):
+                    details = await self.gateway.request(
+                        wikipedia_details,
+                        {
+                            "action": "query",
+                            "pageids": "|".join(
+                                str(item) for item in page_ids[start : start + 50]
+                            ),
+                            "prop": "extracts|pageimages|info",
+                            "inprop": "url",
+                            "exintro": 1,
+                            "explaintext": 1,
+                            "exsentences": 2,
+                            "exlimit": "max",
+                            "piprop": "thumbnail",
+                            "pithumbsize": 480,
+                            "pilimit": "max",
+                            "format": "json",
+                            "formatversion": 2,
+                        },
+                        ttl=21600,
+                    )
+                    batch = details.data.get("query", {}).get("pages", [])
+                    if not isinstance(batch, list):
+                        raise ValueError("invalid Wikipedia details")
+                    detail_pages.extend(batch)
                 for page in detail_pages:
                     place = by_page_id.get(page.get("pageid"))
                     if place is None:
@@ -554,11 +893,17 @@ class DiscoveryService:
                         place.image_url = thumbnail[:1000]
             except (ProviderError, KeyError, TypeError, ValueError, AttributeError):
                 pass
-        return PlacesResponse(
+        response = PlacesResponse(
             destination_id=destination.id,
-            places=places[:40],
+            places=sorted(
+                places,
+                key=lambda place: (
+                    place.distance_m if place.distance_m is not None else 10**9,
+                    place.name.casefold(),
+                ),
+            )[:100],
             radius_m=radius,
-            truncated=scan_truncated or total_place_count > 40,
+            truncated=scan_truncated or total_place_count > 100,
             skipped_records=skipped,
             metadata=self.metadata(
                 mode,
@@ -567,6 +912,42 @@ class DiscoveryService:
                 typed,
             ),
         )
+        if language == "tr" and allow_supplement and len(response.places) < 20:
+            try:
+                english = await self.wikimedia_places(
+                    destination,
+                    categories,
+                    radius,
+                    mode,
+                    "en",
+                    allow_supplement=False,
+                )
+            except ProviderError:
+                return response
+            merged = {place.id: place for place in english.places}
+            # Turkish records win when the same Wikidata identity exists in both editions.
+            merged.update({place.id: place for place in response.places})
+            combined = sorted(
+                merged.values(),
+                key=lambda place: (
+                    place.distance_m if place.distance_m is not None else 10**9,
+                    place.name.casefold(),
+                ),
+            )
+            return response.model_copy(
+                update={
+                    "places": combined[:100],
+                    "truncated": response.truncated
+                    or english.truncated
+                    or len(combined) > 100,
+                    "skipped_records": response.skipped_records
+                    + english.skipped_records,
+                    "metadata": response.metadata.model_copy(
+                        update={"source": "Türkçe ve İngilizce Wikipedia ile Wikidata"}
+                    ),
+                }
+            )
+        return response
 
     @staticmethod
     def parse_places(elements, destination, categories, radius):

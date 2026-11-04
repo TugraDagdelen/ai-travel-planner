@@ -16,7 +16,10 @@ ENDPOINTS = {
     "forecast": "https://api.open-meteo.com/v1/forecast",
     "wikipedia_geo": "https://en.wikipedia.org/w/api.php",
     "wikipedia_details": "https://en.wikipedia.org/w/api.php",
+    "wikipedia_geo_tr": "https://tr.wikipedia.org/w/api.php",
+    "wikipedia_details_tr": "https://tr.wikipedia.org/w/api.php",
     "wikidata_types": "https://query.wikidata.org/sparql",
+    "nominatim_search": "https://nominatim.openstreetmap.org/search",
     # One bounded fallback is allowed for availability, never to evade a 429 or cooldown.
     "overpass": (
         "https://overpass-api.de/api/interpreter",
@@ -48,7 +51,10 @@ class Gateway:
         self.client = client
         self.settings = settings
         self.cache: OrderedDict[str, tuple[float, Payload]] = OrderedDict()
-        self.locks = {name: asyncio.Lock() for name in ("meteo", "overpass", "wikimedia")}
+        self.locks = {
+            name: asyncio.Lock()
+            for name in ("meteo", "overpass", "nominatim", "wikimedia")
+        }
         self.calls = {name: deque() for name in self.locks}
         self.next_call = {name: 0.0 for name in self.locks}
         self.cooldown = {name: 0.0 for name in self.locks}
@@ -59,10 +65,12 @@ class Gateway:
             if endpoint == "overpass"
             else (
                 "wikimedia"
-                if endpoint in {"wikipedia_geo", "wikipedia_details", "wikidata_types"}
+                if endpoint.startswith("wikipedia_") or endpoint == "wikidata_types"
                 else "meteo"
             )
         )
+        if endpoint == "nominatim_search":
+            provider = "nominatim"
         key = endpoint + json.dumps(parameters, sort_keys=True)
         try:
             async with asyncio.timeout(self.settings.provider_timeout_seconds):
@@ -93,6 +101,7 @@ class Gateway:
     async def _fetch(self, endpoint: str, provider: str, parameters: dict) -> Payload:
         interval = {
             "overpass": self.settings.overpass_min_interval_seconds,
+            "nominatim": 1,
             "wikimedia": self.settings.wikimedia_min_interval_seconds,
             "meteo": self.settings.meteo_min_interval_seconds,
         }[provider]
@@ -134,6 +143,10 @@ class Gateway:
                         if len(body) > 2_000_000:
                             raise ProviderError("provider_response_too_large", provider, False)
                     data = json.loads(body)
+                    if endpoint == "nominatim_search":
+                        if not isinstance(data, list):
+                            raise ValueError("invalid Nominatim response")
+                        data = {"results": data}
                     if not isinstance(data, dict) or data.get("error"):
                         raise ValueError("invalid object")
                     # Never cache a partial/error Overpass remark as a complete empty result.

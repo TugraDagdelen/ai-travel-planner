@@ -6,7 +6,7 @@ React + TypeScript + Tailwind arayüzü ve FastAPI backend'i ile geliştirilen s
 
 Sınırlı Gemini SDK bağlantı kontrolü ve tam canlı araç çağırmalı seyahat üretimi, kullanıcı tarafından Free Tier olduğu doğrulanan yerel bir projeyle 2026-11-01 tarihinde Docker içinde başarıyla çalıştı; anahtar depoda tutulmaz. Bu sürüm yalnızca ücretsiz katmanı bulunan `gemini-3.5-flash-lite` modeline izin verir. Google Maps/Search grounding, seçilen modelin API ücretsiz katmanında sunulmadığı için kapalıdır.
 
-Open-Meteo şehir/hava durumu ve Wikimedia/Wikidata gerçek mekân bağlantıları canlı olarak doğrulandı. Paris için yaklaşık dört saniyede 18 koordinatlı ve kategorilendirilmiş gerçek mekân döndü. Overpass sınırlı bir gerçek veri yedeği olarak korunur.
+Open-Meteo şehir/hava durumu ile Wikimedia, Wikidata ve OpenStreetMap gerçek mekân bağlantıları canlı olarak doğrulandı. Şehir nüfusuna göre 15–25 km alan taranır; Türkçe kayıtlar önceliklendirilir, beş kategoriden en fazla 100 sonuç merkezden uzaklığa göre sıralanır. Tekirdağ canlı testinde 20 km içinde 17 gerçek yer bulundu.
 
 ## Amaç ve eğitim hedefleri
 
